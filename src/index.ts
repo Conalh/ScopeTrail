@@ -124,7 +124,7 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
 }
 
 function isReportFormat(value: string | undefined): value is ReportFormat {
-  return value === 'text' || value === 'markdown' || value === 'json';
+  return value === 'text' || value === 'markdown' || value === 'json' || value === 'github';
 }
 
 const invokedPath = process.argv[1] ? fileURLToPath(import.meta.url) === process.argv[1] : false;
@@ -136,7 +136,7 @@ if (invokedPath) {
 function usage(): string {
   return [
     'Usage:',
-    '  scopetrail diff --old <dir> --new <dir> [--format text|markdown|json]',
-    '  scopetrail diff --repo <repo> --base <ref> --head <ref> [--format text|markdown|json]'
+    '  scopetrail diff --old <dir> --new <dir> [--format text|markdown|json|github]',
+    '  scopetrail diff --repo <repo> --base <ref> --head <ref> [--format text|markdown|json|github]'
   ].join('\n');
 }

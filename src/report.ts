@@ -1,7 +1,7 @@
 import type { Finding, Severity } from './types.js';
 
 export type DriftRating = 'none' | Severity;
-export type ReportFormat = 'text' | 'markdown' | 'json';
+export type ReportFormat = 'text' | 'markdown' | 'json' | 'github';
 
 export interface DriftReport {
   rating: DriftRating;
@@ -32,6 +32,10 @@ export function renderReport(report: DriftReport, format: ReportFormat): string 
 
   if (format === 'markdown') {
     return renderMarkdown(report);
+  }
+
+  if (format === 'github') {
+    return renderGithubAnnotations(report);
   }
 
   return renderText(report);
@@ -85,6 +89,33 @@ function renderText(report: DriftReport): string {
   }
 
   return `${lines.join('\n')}\n`;
+}
+
+function renderGithubAnnotations(report: DriftReport): string {
+  if (report.findings.length === 0) {
+    return '';
+  }
+
+  return report.findings
+    .map((finding) => {
+      const title = `ScopeTrail ${finding.severity} permission drift`;
+      const message = `${finding.message} Recommendation: ${finding.recommendation}`;
+      return `::warning file=${escapeProperty(finding.file)},title=${escapeProperty(title)}::${escapeMessage(message)}`;
+    })
+    .join('\n') + '\n';
+}
+
+function escapeMessage(value: string): string {
+  return value
+    .replaceAll('%', '%25')
+    .replaceAll('\r', '%0D')
+    .replaceAll('\n', '%0A');
+}
+
+function escapeProperty(value: string): string {
+  return escapeMessage(value)
+    .replaceAll(':', '%3A')
+    .replaceAll(',', '%2C');
 }
 
 function capitalize(value: string): string {
