@@ -1,0 +1,26 @@
+name: Design partner interest
+description: Tell us what a paid team layer would need to do before we build SaaS.
+title: "[design partner]: "
+labels: ["design-partner"]
+body:
+  - type: input
+    id: repos
+    attributes:
+      label: Repos to watch
+      description: Rough count is enough.
+    validations:
+      required: true
+  - type: textarea
+    id: team-need
+    attributes:
+      label: Team need
+      description: What would multi-repo drift history, Slack alerts, or org baselines need to show?
+    validations:
+      required: true
+  - type: textarea
+    id: buying-signal
+    attributes:
+      label: Buying signal
+      description: What would make this worth paying for?
+    validations:
+      required: false
