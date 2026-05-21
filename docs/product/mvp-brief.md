@@ -105,6 +105,14 @@ Phase 2: GitHub Action
 - Upload Markdown report as an artifact.
 - Fail only on configured severity thresholds.
 
+Initial Action behavior:
+
+- Runs locally inside GitHub Actions against the checked-out repository.
+- Requires `actions/checkout` with `fetch-depth: 0` so base/head refs are available.
+- Uploads nothing to ScopeTrail servers.
+- Writes the report to the GitHub Actions step summary.
+- Starts advisory by default with `fail-on: none`; teams can raise this to `high` or `critical` after tuning.
+
 Phase 3: Paid SaaS
 
 - Drift history.
