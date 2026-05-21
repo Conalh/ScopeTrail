@@ -7,6 +7,7 @@ ScopeTrail is an early CLI prototype that reports risky permission drift between
 - `.mcp.json`
 - `.claude/settings.json`
 - Terminal, Markdown, and JSON output
+- GitHub Action step summaries for pull requests
 
 ## Local Use
 
@@ -16,11 +17,47 @@ npm run build
 node dist/index.js diff --old test/fixtures/combined/old --new test/fixtures/combined/new --format markdown
 ```
 
+Compare two git refs:
+
+```powershell
+node dist/index.js diff --repo . --base main --head HEAD --format markdown
+```
+
 JSON output:
 
 ```powershell
 node dist/index.js diff --old test/fixtures/combined/old --new test/fixtures/combined/new --format json
 ```
+
+## GitHub Action
+
+Add this workflow to review agent permission drift on pull requests:
+
+```yaml
+name: ScopeTrail
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scopetrail:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: Conalh/ScopeTrail@main
+        with:
+          fail-on: none
+```
+
+The action uploads nothing by default. It reads local git state from the checked-out repository and writes a Markdown report to the GitHub Actions step summary.
+
+Start with `fail-on: none` so ScopeTrail is advisory while you tune policy. Raise it to `high` or `critical` once the findings are trusted.
 
 ## Current Findings
 
