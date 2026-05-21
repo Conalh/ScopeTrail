@@ -77,6 +77,8 @@ test('pilot guide gives external maintainers a complete advisory trial path', as
   assert.match(pilot, /3-5 pull requests/i);
   assert.match(pilot, /https:\/\/github\.com\/Conalh\/ScopeTrail\/issues\/18/);
   assert.match(pilot, /https:\/\/github\.com\/Conalh\/ScopeTrail\/issues\/21/);
+  assert.match(pilot, /issues\/new\?template=pilot-result\.yml/);
   assert.match(pilot, /does not count as validation evidence/i);
   assert.match(pilot, /cross-repo visibility/i);
+  assert.match(readme, /pilot-result\.yml/);
 });

@@ -39,3 +39,21 @@ test('team adoption issue template collects paid-layer validation signals withou
   assert.match(teamAdoption, /product validation/i);
   assert.doesNotMatch(teamAdoption, /SaaS is available/i);
 });
+
+test('pilot result issue template collects auditable external validation evidence', async () => {
+  const pilotResult = await readIssueTemplate('pilot-result.yml');
+
+  assert.match(pilotResult, /labels:\s*\["validation", "pilot-result"\]/);
+  assert.match(pilotResult, /id:\s*pilot-source/);
+  assert.match(pilotResult, /id:\s*repository-count/);
+  assert.match(pilotResult, /id:\s*agent-tools/);
+  assert.match(pilotResult, /id:\s*install-status/);
+  assert.match(pilotResult, /id:\s*useful-findings/);
+  assert.match(pilotResult, /id:\s*noisy-findings/);
+  assert.match(pilotResult, /id:\s*missing-surfaces/);
+  assert.match(pilotResult, /id:\s*team-workflow-requested/);
+  assert.match(pilotResult, /id:\s*would-keep-installed/);
+  assert.match(pilotResult, /product validation/i);
+  assert.match(pilotResult, /paid team layer is not available yet/i);
+  assert.doesNotMatch(pilotResult, /SaaS is available/i);
+});

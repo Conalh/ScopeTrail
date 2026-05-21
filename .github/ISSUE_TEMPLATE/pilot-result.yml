@@ -1,0 +1,90 @@
+name: Pilot result
+description: Share ScopeTrail pilot results from an external repository or team trial.
+title: "[pilot result]: "
+labels: ["validation", "pilot-result"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for product validation signals from a ScopeTrail pilot. ScopeTrail's paid team layer is not available yet; these reports help decide whether team workflows are painful enough to build before any hosted SaaS work begins.
+  - type: dropdown
+    id: pilot-source
+    attributes:
+      label: Pilot source
+      description: What kind of pilot produced this report?
+      options:
+        - External repository
+        - Team or organization
+        - Solo repository
+        - Installation question only
+    validations:
+      required: true
+  - type: input
+    id: repository-count
+    attributes:
+      label: Repository count
+      description: How many repositories did you try, or would you want covered?
+      placeholder: "Example: 1, 3, 20+"
+    validations:
+      required: true
+  - type: textarea
+    id: agent-tools
+    attributes:
+      label: Agent tools in use
+      description: List the AI-agent tools or config surfaces involved in the pilot.
+    validations:
+      required: true
+  - type: dropdown
+    id: install-status
+    attributes:
+      label: ScopeTrail install status
+      description: What happened during the pilot?
+      options:
+        - Installed
+        - Asked concrete installation question
+        - Not installed
+        - Not sure yet
+    validations:
+      required: true
+  - type: textarea
+    id: useful-findings
+    attributes:
+      label: Useful findings
+      description: Which ScopeTrail warnings were useful, if any?
+    validations:
+      required: true
+  - type: textarea
+    id: noisy-findings
+    attributes:
+      label: Noisy findings
+      description: Which warnings were noisy, too broad, or false positives?
+    validations:
+      required: true
+  - type: textarea
+    id: missing-surfaces
+    attributes:
+      label: Missing surfaces
+      description: Which agent config files, permission models, or review cases did ScopeTrail miss?
+    validations:
+      required: true
+  - type: checkboxes
+    id: team-workflow-requested
+    attributes:
+      label: Team workflow requested
+      description: Select any team-layer workflows that would matter.
+      options:
+        - label: Cross-repo visibility
+        - label: Policy ownership
+        - label: Exception workflow
+        - label: Reporting
+        - label: None
+  - type: dropdown
+    id: would-keep-installed
+    attributes:
+      label: Would keep installed after trial
+      options:
+        - "Yes"
+        - "No"
+        - Unsure
+    validations:
+      required: true
