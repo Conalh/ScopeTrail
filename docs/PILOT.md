@@ -45,6 +45,10 @@ Report pilot results in the active pilot issue:
 
 https://github.com/Conalh/ScopeTrail/issues/18
 
+Or open a structured pilot result:
+
+https://github.com/Conalh/ScopeTrail/issues/new?template=pilot-result.yml
+
 Use this format:
 
 ```md

@@ -133,7 +133,7 @@ If your team uses another agent config surface, open a
 If you are evaluating ScopeTrail for a team or many repositories, open a
 [team-adoption signal](https://github.com/Conalh/ScopeTrail/issues/new?template=team-adoption.yml).
 Those reports are the validation path for any paid team layer; hosted SaaS is intentionally deferred until the free Action shows repeated team-level pain.
-To help validate that demand, pilot ScopeTrail with `fail-on: none` and report results in the [active pilot issue](https://github.com/Conalh/ScopeTrail/issues/18).
+To help validate that demand, pilot ScopeTrail with `fail-on: none` and report results in the [active pilot issue](https://github.com/Conalh/ScopeTrail/issues/18) or the [pilot result form](https://github.com/Conalh/ScopeTrail/issues/new?template=pilot-result.yml).
 
 ## Development
 
