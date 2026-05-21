@@ -1,0 +1,38 @@
+# Trust and Permissions
+
+ScopeTrail is a local-only GitHub Action and CLI for reviewing AI-agent permission drift in pull requests.
+
+## What It Reads
+
+ScopeTrail reads the checked-out repository and compares supported agent configuration files between the pull request base and head refs. Supported files include `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.codeium/windsurf/mcp_config.json`, `.claude/settings.json`, and `.codex/config.toml`.
+
+In GitHub Actions, `fetch-depth: 0` is required so ScopeTrail can compare the pull request base and head commits instead of only seeing the latest checkout.
+
+## What It Writes
+
+ScopeTrail writes a Markdown report to the GitHub Actions step summary, emits PR-visible warning annotations, and exposes `rating` and `finding-count` outputs from the Action step.
+
+## Data Uploads
+
+ScopeTrail uploads nothing by default. It does not send repository contents, findings, or telemetry to a hosted service.
+
+## Required GitHub Permissions
+
+Required permissions: `contents: read`.
+
+The recommended workflow uses:
+
+```yaml
+permissions:
+  contents: read
+```
+
+That permission lets the Action read the checked-out repository. ScopeTrail does not require write permissions for its advisory default mode.
+
+## Advisory Default
+
+Start with `fail-on: none`. In that mode, ScopeTrail reports findings without blocking the pull request. After the team trusts the findings, raise `fail-on` to `high` or `critical` if blocking risky permission drift fits the repository's policy.
+
+## Security Boundary
+
+ScopeTrail is a review aid. It does not provide a security guarantee, replace human review, or prove that an agent configuration is safe. Treat findings as prompts for review and treat clean reports as limited to the config surfaces ScopeTrail currently supports.
