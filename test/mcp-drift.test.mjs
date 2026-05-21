@@ -17,6 +17,8 @@ test('detects added MCP server with unpinned command', async () => {
     ['mcp_server_added', 'unpinned_mcp_command']
   );
   assert.equal(findings[0].subject, 'stripe-admin');
+  assert.equal(findings[0].line, 7);
   assert.equal(findings[1].severity, 'high');
+  assert.equal(findings[1].line, 9);
   assert.match(findings[1].message, /@vendor\/stripe-mcp@latest/);
 });

@@ -22,7 +22,9 @@ test('detects Claude settings permission drift', async () => {
     ]
   );
   assert.equal(findings[0].subject, 'Bash(npm *)');
+  assert.equal(findings[0].line, 3);
   assert.equal(findings[1].subject, 'Read(~/**)');
+  assert.equal(findings[1].line, 3);
   assert.equal(findings[2].severity, 'critical');
   assert.equal(findings[3].subject, 'PreToolUse');
 });

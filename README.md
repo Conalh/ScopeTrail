@@ -11,7 +11,7 @@ ScopeTrail is a free OSS CLI and GitHub Action that reviews pull requests for ri
 
 - `.mcp.json`
 - `.claude/settings.json`
-- Terminal, Markdown, JSON, and GitHub annotation output
+- Terminal, Markdown, JSON, and line-level GitHub annotation output
 - GitHub Action step summaries and PR-visible warnings
 
 It is intentionally not a hosted scanner. The Action reads the checked-out repository, uploads nothing by default, and starts advisory with `fail-on: none`.
@@ -26,7 +26,7 @@ That PR intentionally adds:
 - An unpinned `@latest` MCP package.
 - Broad Claude Code rules: `Bash(npm *)` and `Read(~/**)`.
 
-ScopeTrail reports `HIGH` permission drift and emits GitHub warning annotations.
+ScopeTrail reports `HIGH` permission drift and emits GitHub warning annotations on the risky config lines.
 
 ## Local Use
 
@@ -69,12 +69,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Conalh/ScopeTrail@v0.1.2
+      - uses: Conalh/ScopeTrail@v0.1.3
         with:
           fail-on: none
 ```
 
-The action uploads nothing by default. It reads local git state from the checked-out repository, writes a Markdown report to the GitHub Actions step summary, and emits PR-visible warning annotations for each finding.
+The action uploads nothing by default. It reads local git state from the checked-out repository, writes a Markdown report to the GitHub Actions step summary, and emits PR-visible warning annotations for each finding. Findings point at exact config lines when ScopeTrail can resolve them.
 
 Start with `fail-on: none` so ScopeTrail is advisory while you tune policy. Raise it to `high` or `critical` once the findings are trusted.
 
