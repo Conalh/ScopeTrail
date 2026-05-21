@@ -24,11 +24,14 @@ test('GitHub Action metadata exposes PR drift inputs', async () => {
   assert.match(action, /--format github/);
 });
 
-test('README Action install tag matches package version', async () => {
+test('public Action install tags match package version', async () => {
   const readme = await readFile(join(packageRoot, 'README.md'), 'utf8');
+  const pilotGuide = await readFile(join(packageRoot, 'docs', 'PILOT.md'), 'utf8');
   const packageJson = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'));
   const version = packageJson.version;
+  const installTagPattern = new RegExp(`Conalh/ScopeTrail@v${version.replaceAll('.', '\\.')}`);
 
-  assert.equal(version, '0.1.6');
-  assert.match(readme, new RegExp(`Conalh/ScopeTrail@v${version.replaceAll('.', '\\.')}`));
+  assert.equal(version, '0.1.7');
+  assert.match(readme, installTagPattern);
+  assert.match(pilotGuide, installTagPattern);
 });

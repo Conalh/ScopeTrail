@@ -69,10 +69,12 @@ test('pilot guide gives external maintainers a complete advisory trial path', as
   const readme = await readProjectFile('README.md');
   const adoption = await readProjectFile('docs', 'ADOPTION.md');
   const pilot = await readProjectFile('docs', 'PILOT.md');
+  const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const installTagPattern = new RegExp(`Conalh/ScopeTrail@v${packageJson.version.replaceAll('.', '\\.')}`);
 
   assert.match(readme, /\[Pilot guide\]\(docs\/PILOT\.md\)/);
   assert.match(adoption, /\[Pilot guide\]\(PILOT\.md\)/);
-  assert.match(pilot, /Conalh\/ScopeTrail@v0\.1\.6/);
+  assert.match(pilot, installTagPattern);
   assert.match(pilot, /fail-on:\s*none/);
   assert.match(pilot, /3-5 pull requests/i);
   assert.match(pilot, /https:\/\/github\.com\/Conalh\/ScopeTrail\/issues\/18/);
