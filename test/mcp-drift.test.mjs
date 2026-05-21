@@ -22,3 +22,20 @@ test('detects added MCP server with unpinned command', async () => {
   assert.equal(findings[1].line, 9);
   assert.match(findings[1].message, /@vendor\/stripe-mcp@latest/);
 });
+
+test('detects MCP drift in Cursor and VS Code config files', async () => {
+  const oldDir = join(testDir, 'fixtures', 'mcp-multi-path', 'old');
+  const newDir = join(testDir, 'fixtures', 'mcp-multi-path', 'new');
+
+  const findings = await detectMcpDrift(oldDir, newDir);
+
+  assert.deepEqual(
+    findings.map((finding) => [finding.file, finding.kind, finding.subject, finding.line]),
+    [
+      ['.cursor/mcp.json', 'mcp_server_added', 'browser-tools', 3],
+      ['.cursor/mcp.json', 'unpinned_mcp_command', 'browser-tools', 5],
+      ['.vscode/mcp.json', 'mcp_server_added', 'docs-search', 3],
+      ['.vscode/mcp.json', 'unpinned_mcp_command', 'docs-search', 5]
+    ]
+  );
+});

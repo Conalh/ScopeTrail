@@ -1,7 +1,13 @@
 import { configPath, isRecord, lineOfJsonKey, lineOfJsonStringValue, readJsonObjectWithSource } from '../discovery.js';
 import type { Finding, McpServerConfig } from '../types.js';
 
-const MCP_FILE = '.mcp.json';
+const MCP_CONFIGS = [
+  { path: '.mcp.json', serverKeys: ['mcpServers'] },
+  { path: '.cursor/mcp.json', serverKeys: ['mcpServers', 'servers'] },
+  { path: '.vscode/mcp.json', serverKeys: ['servers', 'mcpServers'] }
+] as const;
+
+type McpConfigPath = typeof MCP_CONFIGS[number]['path'];
 
 interface McpServerModel extends McpServerConfig {
   line?: number;
@@ -9,55 +15,61 @@ interface McpServerModel extends McpServerConfig {
 }
 
 export async function detectMcpDrift(oldRoot: string, newRoot: string): Promise<Finding[]> {
-  const oldServers = await readMcpServers(oldRoot);
-  const newServers = await readMcpServers(newRoot);
   const findings: Finding[] = [];
 
-  for (const [name, newServer] of Object.entries(newServers)) {
-    const oldServer = oldServers[name];
+  for (const config of MCP_CONFIGS) {
+    const oldServers = await readMcpServers(oldRoot, config);
+    const newServers = await readMcpServers(newRoot, config);
 
-    if (!oldServer) {
-      findings.push({
-        kind: 'mcp_server_added',
-        severity: 'high',
-        file: MCP_FILE,
-        line: newServer.line,
-        subject: name,
-        message: `MCP server "${name}" was added.`,
-        recommendation: 'Review the server package, pin its version, and confirm the tools it exposes before merging.'
-      });
-    } else if (serverCommand(newServer) !== serverCommand(oldServer)) {
-      findings.push({
-        kind: 'mcp_server_command_changed',
-        severity: 'medium',
-        file: MCP_FILE,
-        line: lineForServerCommand(newServer) ?? newServer.line,
-        subject: name,
-        message: `MCP server "${name}" changed its launch command.`,
-        recommendation: 'Confirm the command change is intentional and still points at a trusted, pinned package.'
-      });
-    }
+    for (const [name, newServer] of Object.entries(newServers)) {
+      const oldServer = oldServers[name];
 
-    if ((!oldServer || serverCommand(newServer) !== serverCommand(oldServer)) && isUnpinnedCommand(newServer)) {
-      findings.push({
-        kind: 'unpinned_mcp_command',
-        severity: 'high',
-        file: MCP_FILE,
-        line: lineForUnpinnedCommand(newServer) ?? newServer.line,
-        subject: name,
-        message: `MCP server "${name}" uses an unpinned command: ${serverCommand(newServer)}.`,
-        recommendation: 'Pin executable packages to an exact version and avoid pipe-to-shell installation commands.'
-      });
+      if (!oldServer) {
+        findings.push({
+          kind: 'mcp_server_added',
+          severity: 'high',
+          file: config.path,
+          line: newServer.line,
+          subject: name,
+          message: `MCP server "${name}" was added.`,
+          recommendation: 'Review the server package, pin its version, and confirm the tools it exposes before merging.'
+        });
+      } else if (serverCommand(newServer) !== serverCommand(oldServer)) {
+        findings.push({
+          kind: 'mcp_server_command_changed',
+          severity: 'medium',
+          file: config.path,
+          line: lineForServerCommand(newServer) ?? newServer.line,
+          subject: name,
+          message: `MCP server "${name}" changed its launch command.`,
+          recommendation: 'Confirm the command change is intentional and still points at a trusted, pinned package.'
+        });
+      }
+
+      if ((!oldServer || serverCommand(newServer) !== serverCommand(oldServer)) && isUnpinnedCommand(newServer)) {
+        findings.push({
+          kind: 'unpinned_mcp_command',
+          severity: 'high',
+          file: config.path,
+          line: lineForUnpinnedCommand(newServer) ?? newServer.line,
+          subject: name,
+          message: `MCP server "${name}" uses an unpinned command: ${serverCommand(newServer)}.`,
+          recommendation: 'Pin executable packages to an exact version and avoid pipe-to-shell installation commands.'
+        });
+      }
     }
   }
 
   return findings;
 }
 
-async function readMcpServers(root: string): Promise<Record<string, McpServerModel>> {
-  const source = await readJsonObjectWithSource(configPath(root, MCP_FILE));
+async function readMcpServers(
+  root: string,
+  config: { path: McpConfigPath; serverKeys: readonly string[] }
+): Promise<Record<string, McpServerModel>> {
+  const source = await readJsonObjectWithSource(configPath(root, config.path));
   const json = source.json;
-  const rawServers = json.mcpServers;
+  const rawServers = readServerMap(json, config.serverKeys);
   if (!isRecord(rawServers)) {
     return {};
   }
@@ -78,6 +90,16 @@ async function readMcpServers(root: string): Promise<Record<string, McpServerMod
   }
 
   return servers;
+}
+
+function readServerMap(json: Record<string, unknown>, serverKeys: readonly string[]): unknown {
+  for (const key of serverKeys) {
+    if (isRecord(json[key])) {
+      return json[key];
+    }
+  }
+
+  return undefined;
 }
 
 function serverCommand(server: McpServerModel): string {
