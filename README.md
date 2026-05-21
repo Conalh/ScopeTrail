@@ -98,6 +98,13 @@ ScopeTrail v0 detects:
 - Removed Claude Code deny rules for sensitive files such as `.env`.
 - Removed Claude Code hooks such as `PreToolUse`.
 
+## Feedback Wanted
+
+ScopeTrail is intentionally small right now. If a warning is noisy, open a
+[false-positive report](https://github.com/Conalh/ScopeTrail/issues/new?template=false-positive.yml).
+If your team uses another agent config surface, open a
+[missing-surface request](https://github.com/Conalh/ScopeTrail/issues/new?template=missing-surface.yml).
+
 ## Development
 
 ```powershell
