@@ -88,7 +88,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Conalh/ScopeTrail@v0.1.5
+      - uses: Conalh/ScopeTrail@v0.1.6
         with:
           fail-on: none
 ```
