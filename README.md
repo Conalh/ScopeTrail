@@ -20,6 +20,8 @@ ScopeTrail is a free OSS CLI and GitHub Action that reviews pull requests for ri
 
 It is intentionally not a hosted scanner. The Action reads the checked-out repository, uploads nothing by default, and starts advisory with `fail-on: none`.
 
+Before you install with `fail-on: none`, see [Trust and permissions](docs/TRUST.md). For rollout, use the [Adoption checklist](docs/ADOPTION.md). For the paid-team validation boundary, see [Team-layer validation](docs/TEAM_VALIDATION.md).
+
 ## Part of an AI-agent governance suite
 
 Four tools mapping orthogonal failure modes of AI-agent deployment:
@@ -97,6 +99,8 @@ Start with `fail-on: none` so ScopeTrail is advisory while you tune policy. Rais
 
 `fetch-depth: 0` is required because ScopeTrail compares the pull request base and head refs.
 
+Before rolling this out across a team, review [Trust and permissions](docs/TRUST.md) and the [Adoption checklist](docs/ADOPTION.md).
+
 Action outputs:
 
 - `rating`: `none`, `low`, `medium`, `high`, or `critical`
@@ -124,6 +128,9 @@ ScopeTrail is intentionally small right now. If a warning is noisy, open a
 [false-positive report](https://github.com/Conalh/ScopeTrail/issues/new?template=false-positive.yml).
 If your team uses another agent config surface, open a
 [missing-surface request](https://github.com/Conalh/ScopeTrail/issues/new?template=missing-surface.yml).
+If you are evaluating ScopeTrail for a team or many repositories, open a
+[team-adoption signal](https://github.com/Conalh/ScopeTrail/issues/new?template=team-adoption.yml).
+Those reports are the validation path for any paid team layer; hosted SaaS is intentionally deferred until the free Action shows repeated team-level pain.
 
 ## Development
 
