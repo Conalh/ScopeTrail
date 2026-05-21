@@ -10,6 +10,8 @@ Code review for AI agent permission drift.
 ScopeTrail is a free OSS CLI and GitHub Action that reviews pull requests for risky changes to AI-agent configuration files.
 
 - `.mcp.json`
+- `.cursor/mcp.json`
+- `.vscode/mcp.json`
 - `.claude/settings.json`
 - Terminal, Markdown, JSON, and line-level GitHub annotation output
 - GitHub Action step summaries and PR-visible warnings
@@ -71,7 +73,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Conalh/ScopeTrail@v0.1.3
+      - uses: Conalh/ScopeTrail@v0.1.4
         with:
           fail-on: none
 ```
@@ -94,6 +96,7 @@ ScopeTrail v0 detects:
 - Added MCP servers.
 - Changed MCP launch commands.
 - Unpinned MCP launch commands such as `@latest`.
+- Cursor and VS Code MCP config files using either `mcpServers` or `servers`.
 - Broad Claude Code allow rules such as `Bash(npm *)` and `Read(~/**)`.
 - Removed Claude Code deny rules for sensitive files such as `.env`.
 - Removed Claude Code hooks such as `PreToolUse`.

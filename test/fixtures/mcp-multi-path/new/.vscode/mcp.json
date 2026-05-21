@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "docs-search": {
+      "command": "npx",
+      "args": ["-y", "@example/docs-mcp"]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "browser-tools": {
+      "command": "npx",
+      "args": ["-y", "@agentdesk/browser-tools@latest"]
+    }
+  }
+}
