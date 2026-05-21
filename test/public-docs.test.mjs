@@ -53,3 +53,14 @@ test('team validation doc keeps SaaS deferred behind evidence gates', async () =
   assert.match(validation, /cross-repo visibility/i);
   assert.match(validation, /exception workflow/i);
 });
+
+test('public docs link the pilot issue as the active validation funnel', async () => {
+  const readme = await readProjectFile('README.md');
+  const validation = await readProjectFile('docs', 'TEAM_VALIDATION.md');
+  const pilotIssueUrl = 'https://github.com/Conalh/ScopeTrail/issues/18';
+
+  assert.match(readme, /Pilot ScopeTrail/i);
+  assert.match(readme, new RegExp(pilotIssueUrl.replaceAll('/', '\\/')));
+  assert.match(validation, /active pilot issue/i);
+  assert.match(validation, new RegExp(pilotIssueUrl.replaceAll('/', '\\/')));
+});

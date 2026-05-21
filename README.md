@@ -22,6 +22,8 @@ It is intentionally not a hosted scanner. The Action reads the checked-out repos
 
 Before you install with `fail-on: none`, see [Trust and permissions](docs/TRUST.md). For rollout, use the [Adoption checklist](docs/ADOPTION.md). For the paid-team validation boundary, see [Team-layer validation](docs/TEAM_VALIDATION.md).
 
+Pilot ScopeTrail in a real repository and share team feedback in the [active pilot issue](https://github.com/Conalh/ScopeTrail/issues/18).
+
 ## Part of an AI-agent governance suite
 
 Four tools mapping orthogonal failure modes of AI-agent deployment:
@@ -131,6 +133,7 @@ If your team uses another agent config surface, open a
 If you are evaluating ScopeTrail for a team or many repositories, open a
 [team-adoption signal](https://github.com/Conalh/ScopeTrail/issues/new?template=team-adoption.yml).
 Those reports are the validation path for any paid team layer; hosted SaaS is intentionally deferred until the free Action shows repeated team-level pain.
+To help validate that demand, pilot ScopeTrail with `fail-on: none` and report results in the [active pilot issue](https://github.com/Conalh/ScopeTrail/issues/18).
 
 ## Development
 
