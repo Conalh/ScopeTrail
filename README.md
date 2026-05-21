@@ -28,6 +28,8 @@ That PR intentionally adds:
 
 ScopeTrail reports `HIGH` permission drift and emits GitHub warning annotations on the risky config lines.
 
+![ScopeTrail PR annotations showing risky Claude and MCP config changes](assets/demo-pr-annotations.png)
+
 ## Local Use
 
 ```powershell
