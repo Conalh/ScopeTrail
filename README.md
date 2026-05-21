@@ -55,7 +55,7 @@ jobs:
           fail-on: none
 ```
 
-The action uploads nothing by default. It reads local git state from the checked-out repository and writes a Markdown report to the GitHub Actions step summary.
+The action uploads nothing by default. It reads local git state from the checked-out repository, writes a Markdown report to the GitHub Actions step summary, and emits PR-visible warning annotations for each finding.
 
 Start with `fail-on: none` so ScopeTrail is advisory while you tune policy. Raise it to `high` or `critical` once the findings are trusted.
 
