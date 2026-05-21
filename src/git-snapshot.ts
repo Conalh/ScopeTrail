@@ -3,9 +3,22 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
+import { CLAUDE_TARGET_PATHS } from './detectors/claude-settings.js';
+import { CODEX_TARGET_PATHS } from './detectors/codex-config.js';
+import { MCP_TARGET_PATHS } from './detectors/mcp.js';
 
 const execFileAsync = promisify(execFile);
-const SNAPSHOT_PATHS = ['.mcp.json', '.claude/settings.json'];
+
+// Union of every config path the detectors read. Sourced from each
+// detector module so adding a new surface in one place can never leave
+// the git-mode snapshot blind to it (the previous hard-coded list missed
+// .cursor/mcp.json, .vscode/mcp.json, .codeium/windsurf/mcp_config.json,
+// and .codex/config.toml — silently, in the actual GitHub Action path).
+export const SNAPSHOT_PATHS: readonly string[] = [
+  ...MCP_TARGET_PATHS,
+  ...CLAUDE_TARGET_PATHS,
+  ...CODEX_TARGET_PATHS
+];
 
 export interface GitSnapshot {
   root: string;

@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { configPath } from '../discovery.js';
 import type { Finding } from '../types.js';
 
-const CODEX_CONFIG_FILE = '.codex/config.toml';
+export const CODEX_CONFIG_FILE = '.codex/config.toml';
+export const CODEX_TARGET_PATHS: readonly string[] = [CODEX_CONFIG_FILE];
 
 interface TomlEntry {
   line: number;

@@ -8,6 +8,11 @@ const MCP_CONFIGS = [
   { path: '.codeium/windsurf/mcp_config.json', serverKeys: ['mcpServers'] }
 ] as const;
 
+// Exported so git-snapshot can materialize every surface this detector
+// reads. Keeping the source of truth in the detector prevents the
+// snapshot list and the detector list from drifting (they did, before).
+export const MCP_TARGET_PATHS: readonly string[] = MCP_CONFIGS.map((config) => config.path);
+
 type McpConfigPath = typeof MCP_CONFIGS[number]['path'];
 
 interface McpServerModel extends McpServerConfig {
