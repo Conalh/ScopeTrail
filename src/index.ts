@@ -3,6 +3,7 @@
 import { fileURLToPath } from 'node:url';
 import { detectClaudeSettingsDrift } from './detectors/claude-settings.js';
 import { detectMcpDrift } from './detectors/mcp.js';
+import { materializeGitSnapshot } from './git-snapshot.js';
 import { createReport, renderReport, type ReportFormat } from './report.js';
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
@@ -22,25 +23,44 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
 async function runDiff(argv: string[]): Promise<number> {
   const parsed = parseDiffArgs(argv);
   if (!parsed.ok) {
-    process.stderr.write(`${parsed.error}\nUsage: scopetrail diff --old <dir> --new <dir> [--format text|markdown|json]\n`);
+    process.stderr.write(`${parsed.error}\n${usage()}\n`);
     return 2;
   }
 
-  const findings = [
-    ...(await detectMcpDrift(parsed.oldRoot, parsed.newRoot)),
-    ...(await detectClaudeSettingsDrift(parsed.oldRoot, parsed.newRoot))
-  ];
-  process.stdout.write(renderReport(createReport(findings), parsed.format));
-  return 0;
+  if (parsed.mode === 'directories') {
+    const findings = [
+      ...(await detectMcpDrift(parsed.oldRoot, parsed.newRoot)),
+      ...(await detectClaudeSettingsDrift(parsed.oldRoot, parsed.newRoot))
+    ];
+    process.stdout.write(renderReport(createReport(findings), parsed.format));
+    return 0;
+  }
+
+  const baseSnapshot = await materializeGitSnapshot(parsed.repo, parsed.base);
+  const headSnapshot = await materializeGitSnapshot(parsed.repo, parsed.head);
+  try {
+    const findings = [
+      ...(await detectMcpDrift(baseSnapshot.root, headSnapshot.root)),
+      ...(await detectClaudeSettingsDrift(baseSnapshot.root, headSnapshot.root))
+    ];
+    process.stdout.write(renderReport(createReport(findings), parsed.format));
+    return 0;
+  } finally {
+    await Promise.all([baseSnapshot.cleanup(), headSnapshot.cleanup()]);
+  }
 }
 
 type ParsedDiffArgs =
-  | { ok: true; oldRoot: string; newRoot: string; format: ReportFormat }
+  | { ok: true; mode: 'directories'; oldRoot: string; newRoot: string; format: ReportFormat }
+  | { ok: true; mode: 'git'; repo: string; base: string; head: string; format: ReportFormat }
   | { ok: false; error: string };
 
 function parseDiffArgs(argv: string[]): ParsedDiffArgs {
   let oldRoot: string | undefined;
   let newRoot: string | undefined;
+  let base: string | undefined;
+  let head: string | undefined;
+  let repo = process.cwd();
   let format: ReportFormat = 'text';
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -53,6 +73,15 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
     } else if (arg === '--new') {
       newRoot = value;
       index += 1;
+    } else if (arg === '--repo') {
+      repo = value;
+      index += 1;
+    } else if (arg === '--base') {
+      base = value;
+      index += 1;
+    } else if (arg === '--head') {
+      head = value;
+      index += 1;
     } else if (arg === '--format') {
       if (!isReportFormat(value)) {
         return { ok: false, error: `Invalid format: ${value ?? ''}` };
@@ -64,15 +93,34 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
     }
   }
 
+  const hasDirectoryMode = oldRoot || newRoot;
+  const hasGitMode = base || head;
+
+  if (hasDirectoryMode && hasGitMode) {
+    return { ok: false, error: 'Use either --old/--new or --base/--head, not both.' };
+  }
+
+  if (hasGitMode) {
+    if (!base) {
+      return { ok: false, error: 'Missing required --base <ref> argument.' };
+    }
+
+    if (!head) {
+      return { ok: false, error: 'Missing required --head <ref> argument.' };
+    }
+
+    return { ok: true, mode: 'git', repo, base, head, format };
+  }
+
   if (!oldRoot) {
-    return { ok: false, error: 'Missing required --old <dir> argument.' };
+    return { ok: false, error: 'Missing required --old <dir> argument or --base <ref> argument.' };
   }
 
   if (!newRoot) {
     return { ok: false, error: 'Missing required --new <dir> argument.' };
   }
 
-  return { ok: true, oldRoot, newRoot, format };
+  return { ok: true, mode: 'directories', oldRoot, newRoot, format };
 }
 
 function isReportFormat(value: string | undefined): value is ReportFormat {
@@ -83,4 +131,12 @@ const invokedPath = process.argv[1] ? fileURLToPath(import.meta.url) === process
 
 if (invokedPath) {
   process.exitCode = await main();
+}
+
+function usage(): string {
+  return [
+    'Usage:',
+    '  scopetrail diff --old <dir> --new <dir> [--format text|markdown|json]',
+    '  scopetrail diff --repo <repo> --base <ref> --head <ref> [--format text|markdown|json]'
+  ].join('\n');
 }
