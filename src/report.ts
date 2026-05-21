@@ -57,6 +57,7 @@ function renderMarkdown(report: DriftReport): string {
 
   if (report.findings.length === 0) {
     lines.push('No agent permission drift findings.');
+    appendPilotFeedback(lines);
     return `${lines.join('\n')}\n`;
   }
 
@@ -75,7 +76,19 @@ function renderMarkdown(report: DriftReport): string {
     lines.push('');
   }
 
+  appendPilotFeedback(lines);
   return `${lines.join('\n').trimEnd()}\n`;
+}
+
+function appendPilotFeedback(lines: string[]): void {
+  lines.push(
+    '',
+    '## Pilot feedback',
+    '',
+    'Trying ScopeTrail in advisory mode? Report whether this run was useful, noisy, or missing an agent config surface:',
+    '',
+    'https://github.com/Conalh/ScopeTrail/issues/new?template=pilot-result.yml'
+  );
 }
 
 function renderText(report: DriftReport): string {

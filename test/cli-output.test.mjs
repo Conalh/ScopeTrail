@@ -49,6 +49,9 @@ test('CLI emits Markdown permission drift report', async () => {
   assert.match(stdout, /stripe-admin/);
   assert.match(stdout, /Bash\(npm \*\)/);
   assert.match(stdout, /PreToolUse/);
+  assert.match(stdout, /## Pilot feedback/);
+  assert.match(stdout, /issues\/new\?template=pilot-result\.yml/);
+  assert.match(stdout, /useful, noisy, or missing an agent config surface/i);
 });
 
 test('CLI emits GitHub warning annotations for permission drift findings', async () => {
