@@ -2,6 +2,8 @@
 
 The paid team layer is a hypothesis. ScopeTrail should validate that teams need it before any hosted SaaS work begins.
 
+The active pilot issue is https://github.com/Conalh/ScopeTrail/issues/18. Use it to report installs, team workflow pain, and whether the evidence gates below are being met.
+
 ## Hypotheses
 
 - Teams need shared visibility into AI-agent permission drift across many repositories.
