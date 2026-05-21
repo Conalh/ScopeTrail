@@ -20,6 +20,17 @@ ScopeTrail is a free OSS CLI and GitHub Action that reviews pull requests for ri
 
 It is intentionally not a hosted scanner. The Action reads the checked-out repository, uploads nothing by default, and starts advisory with `fail-on: none`.
 
+## Part of an AI-agent governance suite
+
+Four tools mapping orthogonal failure modes of AI-agent deployment:
+
+- **ScopeTrail** *(this repo)* — config drift over time (PR-level).
+- **[PolicyMesh](https://github.com/Conalh/PolicyMesh)** — policy contradictions across agent surfaces.
+- **[CapabilityEcho](https://github.com/Conalh/CapabilityEcho)** — capability drift via code, not config.
+- **[TaskBound](https://github.com/Conalh/TaskBound)** — scope creep after the agent runs.
+
+The first three are preventive (static analysis of config and code). TaskBound is detective (behavioral, comparing stated intent vs. actual diff).
+
 ## Demo
 
 Live demo PR: [Demo: risky agent permission drift](https://github.com/Conalh/ScopeTrail/pull/3)
