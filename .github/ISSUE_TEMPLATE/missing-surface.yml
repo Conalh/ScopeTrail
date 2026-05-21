@@ -24,3 +24,27 @@ body:
       description: Describe the changes that should produce findings.
     validations:
       required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Affected scope
+      description: Help prioritize whether this matters for one repo or repeated team workflows.
+      options:
+        - One repository
+        - Multiple repositories
+        - Organization-wide pattern
+        - Not sure yet
+    validations:
+      required: true
+  - type: dropdown
+    id: review-surface
+    attributes:
+      label: Review surface
+      description: Where would a ScopeTrail warning be useful?
+      options:
+        - Pull request check
+        - Local CLI
+        - Both pull request and local CLI
+        - Not sure yet
+    validations:
+      required: true
