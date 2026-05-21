@@ -94,12 +94,3 @@ npm run build
 npm test
 ```
 
-## Product Direction
-
-The CLI and Action stay free. ScopeTrail only considers a paid team layer after real users ask for multi-repo drift history, shared policy, Slack alerts, and organization-level baselines.
-
-See:
-
-- [Launch plan](docs/traction/launch-plan.md)
-- [Public config audit methodology](docs/traction/public-config-audit-methodology.md)
-- [Design partner validation](docs/traction/design-partner-validation.md)
