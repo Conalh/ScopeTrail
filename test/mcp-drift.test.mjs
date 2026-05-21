@@ -39,3 +39,19 @@ test('detects MCP drift in Cursor and VS Code config files', async () => {
     ]
   );
 });
+
+test('detects MCP drift in Windsurf config files', async () => {
+  const oldDir = join(testDir, 'fixtures', 'windsurf-mcp', 'old');
+  const newDir = join(testDir, 'fixtures', 'windsurf-mcp', 'new');
+
+  const findings = await detectMcpDrift(oldDir, newDir);
+
+  assert.deepEqual(
+    findings.map((finding) => [finding.file, finding.kind, finding.subject, finding.line]),
+    [
+      ['.codeium/windsurf/mcp_config.json', 'mcp_server_command_changed', 'team-registry', 4],
+      ['.codeium/windsurf/mcp_config.json', 'mcp_server_added', 'browser-tools', 6],
+      ['.codeium/windsurf/mcp_config.json', 'unpinned_mcp_command', 'browser-tools', 8]
+    ]
+  );
+});

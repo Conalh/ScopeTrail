@@ -4,7 +4,8 @@ import type { Finding, McpServerConfig } from '../types.js';
 const MCP_CONFIGS = [
   { path: '.mcp.json', serverKeys: ['mcpServers'] },
   { path: '.cursor/mcp.json', serverKeys: ['mcpServers', 'servers'] },
-  { path: '.vscode/mcp.json', serverKeys: ['servers', 'mcpServers'] }
+  { path: '.vscode/mcp.json', serverKeys: ['servers', 'mcpServers'] },
+  { path: '.codeium/windsurf/mcp_config.json', serverKeys: ['mcpServers'] }
 ] as const;
 
 type McpConfigPath = typeof MCP_CONFIGS[number]['path'];
@@ -85,7 +86,8 @@ async function readMcpServers(
       sourceText: source.text,
       command: typeof value.command === 'string' ? value.command : undefined,
       args: Array.isArray(value.args) ? value.args.filter((arg): arg is string => typeof arg === 'string') : undefined,
-      url: typeof value.url === 'string' ? value.url : undefined
+      url: typeof value.url === 'string' ? value.url : undefined,
+      serverUrl: typeof value.serverUrl === 'string' ? value.serverUrl : undefined
     };
   }
 
@@ -103,7 +105,7 @@ function readServerMap(json: Record<string, unknown>, serverKeys: readonly strin
 }
 
 function serverCommand(server: McpServerModel): string {
-  return [server.command, ...(server.args ?? []), server.url].filter(Boolean).join(' ');
+  return [server.command, ...(server.args ?? []), server.url, server.serverUrl].filter(Boolean).join(' ');
 }
 
 function isUnpinnedCommand(server: McpServerModel): boolean {
@@ -146,20 +148,20 @@ function hasExactVersion(value: string): boolean {
 }
 
 function lineForServerCommand(server: McpServerModel): number | undefined {
-  return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url]) ?? server.line;
+  return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url, server.serverUrl]) ?? server.line;
 }
 
 function lineForUnpinnedCommand(server: McpServerModel): number | undefined {
   const command = serverCommand(server);
   const normalized = command.toLowerCase();
   if (normalized.includes('@latest')) {
-    return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url], (value) =>
+    return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url, server.serverUrl], (value) =>
       value.toLowerCase().includes('@latest')
     );
   }
 
   if (/\b(curl|iwr|invoke-webrequest)\b/.test(normalized)) {
-    return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url]);
+    return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url, server.serverUrl]);
   }
 
   if (['npx', 'uvx', 'pipx'].includes((server.command ?? '').toLowerCase())) {
@@ -167,7 +169,7 @@ function lineForUnpinnedCommand(server: McpServerModel): number | undefined {
   }
 
   if (/https:\/\/github\.com\/[^ ]+/.test(normalized)) {
-    return firstLineForValues(server, [server.url, ...(server.args ?? [])], (value) =>
+    return firstLineForValues(server, [server.url, server.serverUrl, ...(server.args ?? [])], (value) =>
       value.toLowerCase().includes('https://github.com/')
     );
   }

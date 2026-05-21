@@ -14,4 +14,5 @@ export interface McpServerConfig {
   command?: string;
   args?: string[];
   url?: string;
+  serverUrl?: string;
 }

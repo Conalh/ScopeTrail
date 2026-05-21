@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "team-registry": {
+      "serverUrl": "https://new.example.com/mcp"
+    },
+    "browser-tools": {
+      "command": "npx",
+      "args": ["-y", "@agentdesk/browser-tools@latest"]
+    }
+  }
+}

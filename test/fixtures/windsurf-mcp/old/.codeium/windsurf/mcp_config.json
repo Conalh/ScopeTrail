@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "team-registry": {
+      "serverUrl": "https://old.example.com/mcp"
+    }
+  }
+}

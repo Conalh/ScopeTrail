@@ -12,6 +12,7 @@ ScopeTrail is a free OSS CLI and GitHub Action that reviews pull requests for ri
 - `.mcp.json`
 - `.cursor/mcp.json`
 - `.vscode/mcp.json`
+- `.codeium/windsurf/mcp_config.json`
 - `.claude/settings.json`
 - `.codex/config.toml`
 - Terminal, Markdown, JSON, and line-level GitHub annotation output
@@ -97,7 +98,8 @@ ScopeTrail v0 detects:
 - Added MCP servers.
 - Changed MCP launch commands.
 - Unpinned MCP launch commands such as `@latest`.
-- Cursor and VS Code MCP config files using either `mcpServers` or `servers`.
+- Cursor, VS Code, and Windsurf MCP config files using `mcpServers` or `servers` where supported.
+- Windsurf remote MCP endpoint changes through `serverUrl`.
 - Broad Claude Code allow rules such as `Bash(npm *)` and `Read(~/**)`.
 - Removed Claude Code deny rules for sensitive files such as `.env`.
 - Removed Claude Code hooks such as `PreToolUse`.
