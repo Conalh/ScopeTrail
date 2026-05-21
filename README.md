@@ -13,6 +13,7 @@ ScopeTrail is a free OSS CLI and GitHub Action that reviews pull requests for ri
 - `.cursor/mcp.json`
 - `.vscode/mcp.json`
 - `.claude/settings.json`
+- `.codex/config.toml`
 - Terminal, Markdown, JSON, and line-level GitHub annotation output
 - GitHub Action step summaries and PR-visible warnings
 
@@ -73,7 +74,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Conalh/ScopeTrail@v0.1.4
+      - uses: Conalh/ScopeTrail@v0.1.5
         with:
           fail-on: none
 ```
@@ -100,6 +101,7 @@ ScopeTrail v0 detects:
 - Broad Claude Code allow rules such as `Bash(npm *)` and `Read(~/**)`.
 - Removed Claude Code deny rules for sensitive files such as `.env`.
 - Removed Claude Code hooks such as `PreToolUse`.
+- Codex config drift such as full-access/elevated sandboxes, weakened approval policy, enabled network access, or trusted project settings.
 
 ## Feedback Wanted
 
