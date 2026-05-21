@@ -100,7 +100,12 @@ function renderGithubAnnotations(report: DriftReport): string {
     .map((finding) => {
       const title = `ScopeTrail ${finding.severity} permission drift`;
       const message = `${finding.message} Recommendation: ${finding.recommendation}`;
-      return `::warning file=${escapeProperty(finding.file)},title=${escapeProperty(title)}::${escapeMessage(message)}`;
+      const properties = [`file=${escapeProperty(finding.file)}`];
+      if (finding.line && finding.line > 0) {
+        properties.push(`line=${finding.line}`);
+      }
+      properties.push(`title=${escapeProperty(title)}`);
+      return `::warning ${properties.join(',')}::${escapeMessage(message)}`;
     })
     .join('\n') + '\n';
 }

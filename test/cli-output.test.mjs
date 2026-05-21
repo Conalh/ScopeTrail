@@ -63,7 +63,9 @@ test('CLI emits GitHub warning annotations for permission drift findings', async
 
   const lines = stdout.trim().split('\n');
   assert.equal(lines.length, 6);
-  assert.match(lines[0], /^::warning file=.mcp.json,title=ScopeTrail high permission drift::/);
+  assert.match(lines[0], /^::warning file=.mcp.json,line=7,title=ScopeTrail high permission drift::/);
+  assert.match(stdout, /file=.mcp.json,line=9,title=ScopeTrail high permission drift/);
+  assert.match(stdout, /file=.claude\/settings.json,line=3,title=ScopeTrail high permission drift/);
   assert.match(stdout, /stripe-admin/);
   assert.match(stdout, /Bash\(npm \*\)/);
   assert.match(stdout, /Read\(.env\)/);
