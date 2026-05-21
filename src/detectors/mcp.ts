@@ -1,7 +1,12 @@
-import { configPath, isRecord, readJsonObject } from '../discovery.js';
+import { configPath, isRecord, lineOfJsonKey, lineOfJsonStringValue, readJsonObjectWithSource } from '../discovery.js';
 import type { Finding, McpServerConfig } from '../types.js';
 
 const MCP_FILE = '.mcp.json';
+
+interface McpServerModel extends McpServerConfig {
+  line?: number;
+  sourceText?: string;
+}
 
 export async function detectMcpDrift(oldRoot: string, newRoot: string): Promise<Finding[]> {
   const oldServers = await readMcpServers(oldRoot);
@@ -16,6 +21,7 @@ export async function detectMcpDrift(oldRoot: string, newRoot: string): Promise<
         kind: 'mcp_server_added',
         severity: 'high',
         file: MCP_FILE,
+        line: newServer.line,
         subject: name,
         message: `MCP server "${name}" was added.`,
         recommendation: 'Review the server package, pin its version, and confirm the tools it exposes before merging.'
@@ -25,6 +31,7 @@ export async function detectMcpDrift(oldRoot: string, newRoot: string): Promise<
         kind: 'mcp_server_command_changed',
         severity: 'medium',
         file: MCP_FILE,
+        line: lineForServerCommand(newServer) ?? newServer.line,
         subject: name,
         message: `MCP server "${name}" changed its launch command.`,
         recommendation: 'Confirm the command change is intentional and still points at a trusted, pinned package.'
@@ -36,6 +43,7 @@ export async function detectMcpDrift(oldRoot: string, newRoot: string): Promise<
         kind: 'unpinned_mcp_command',
         severity: 'high',
         file: MCP_FILE,
+        line: lineForUnpinnedCommand(newServer) ?? newServer.line,
         subject: name,
         message: `MCP server "${name}" uses an unpinned command: ${serverCommand(newServer)}.`,
         recommendation: 'Pin executable packages to an exact version and avoid pipe-to-shell installation commands.'
@@ -46,20 +54,23 @@ export async function detectMcpDrift(oldRoot: string, newRoot: string): Promise<
   return findings;
 }
 
-async function readMcpServers(root: string): Promise<Record<string, McpServerConfig>> {
-  const json = await readJsonObject(configPath(root, MCP_FILE));
+async function readMcpServers(root: string): Promise<Record<string, McpServerModel>> {
+  const source = await readJsonObjectWithSource(configPath(root, MCP_FILE));
+  const json = source.json;
   const rawServers = json.mcpServers;
   if (!isRecord(rawServers)) {
     return {};
   }
 
-  const servers: Record<string, McpServerConfig> = {};
+  const servers: Record<string, McpServerModel> = {};
   for (const [name, value] of Object.entries(rawServers)) {
     if (!isRecord(value)) {
       continue;
     }
 
     servers[name] = {
+      line: lineOfJsonKey(source.text, name),
+      sourceText: source.text,
       command: typeof value.command === 'string' ? value.command : undefined,
       args: Array.isArray(value.args) ? value.args.filter((arg): arg is string => typeof arg === 'string') : undefined,
       url: typeof value.url === 'string' ? value.url : undefined
@@ -69,11 +80,11 @@ async function readMcpServers(root: string): Promise<Record<string, McpServerCon
   return servers;
 }
 
-function serverCommand(server: McpServerConfig): string {
+function serverCommand(server: McpServerModel): string {
   return [server.command, ...(server.args ?? []), server.url].filter(Boolean).join(' ');
 }
 
-function isUnpinnedCommand(server: McpServerConfig): boolean {
+function isUnpinnedCommand(server: McpServerModel): boolean {
   const command = serverCommand(server);
   const normalized = command.toLowerCase();
 
@@ -110,4 +121,56 @@ function hasExactVersion(value: string): boolean {
 
   const version = value.slice(packageVersion + 1);
   return /^\d+\.\d+\.\d+/.test(version);
+}
+
+function lineForServerCommand(server: McpServerModel): number | undefined {
+  return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url]) ?? server.line;
+}
+
+function lineForUnpinnedCommand(server: McpServerModel): number | undefined {
+  const command = serverCommand(server);
+  const normalized = command.toLowerCase();
+  if (normalized.includes('@latest')) {
+    return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url], (value) =>
+      value.toLowerCase().includes('@latest')
+    );
+  }
+
+  if (/\b(curl|iwr|invoke-webrequest)\b/.test(normalized)) {
+    return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url]);
+  }
+
+  if (['npx', 'uvx', 'pipx'].includes((server.command ?? '').toLowerCase())) {
+    return firstLineForValues(server, server.args ?? [], (arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
+  }
+
+  if (/https:\/\/github\.com\/[^ ]+/.test(normalized)) {
+    return firstLineForValues(server, [server.url, ...(server.args ?? [])], (value) =>
+      value.toLowerCase().includes('https://github.com/')
+    );
+  }
+
+  return server.line;
+}
+
+function firstLineForValues(
+  server: McpServerModel,
+  values: Array<string | undefined>,
+  predicate: (value: string) => boolean = () => true
+): number | undefined {
+  const source = getSourceText(server);
+  for (const value of values) {
+    if (value && predicate(value)) {
+      const line = lineOfJsonStringValue(source, value);
+      if (line) {
+        return line;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function getSourceText(server: McpServerModel): string {
+  return server.sourceText ?? '';
 }

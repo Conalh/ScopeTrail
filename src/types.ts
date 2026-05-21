@@ -4,6 +4,7 @@ export interface Finding {
   kind: string;
   severity: Severity;
   file: string;
+  line?: number;
   subject: string;
   message: string;
   recommendation: string;
