@@ -1,6 +1,6 @@
 # Adoption Checklist
 
-Use this checklist when trying ScopeTrail in a real repository.
+Use this checklist when trying ScopeTrail in a real repository. For a copy-paste external trial flow, use the [Pilot guide](PILOT.md).
 
 1. Install ScopeTrail with `fail-on: none`.
 2. Use `actions/checkout` with `fetch-depth: 0`.
