@@ -1,5 +1,10 @@
 # ScopeTrail
 
+[![CI](https://github.com/Conalh/ScopeTrail/actions/workflows/ci.yml/badge.svg)](https://github.com/Conalh/ScopeTrail/actions/workflows/ci.yml)
+[![ScopeTrail](https://github.com/Conalh/ScopeTrail/actions/workflows/scopetrail.yml/badge.svg)](https://github.com/Conalh/ScopeTrail/actions/workflows/scopetrail.yml)
+[![Release](https://img.shields.io/github/v/release/Conalh/ScopeTrail)](https://github.com/Conalh/ScopeTrail/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Code review for AI agent permission drift.
 
 ScopeTrail is a free OSS CLI and GitHub Action that reviews pull requests for risky changes to AI-agent configuration files.
@@ -74,6 +79,11 @@ The action uploads nothing by default. It reads local git state from the checked
 Start with `fail-on: none` so ScopeTrail is advisory while you tune policy. Raise it to `high` or `critical` once the findings are trusted.
 
 `fetch-depth: 0` is required because ScopeTrail compares the pull request base and head refs.
+
+Action outputs:
+
+- `rating`: `none`, `low`, `medium`, `high`, or `critical`
+- `finding-count`: total findings in the diff
 
 ## Current Findings
 

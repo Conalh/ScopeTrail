@@ -11,11 +11,14 @@ test('GitHub Action metadata exposes PR drift inputs', async () => {
   const action = await readFile(join(packageRoot, 'action.yml'), 'utf8');
 
   assert.match(action, /^name:\s*ScopeTrail/m);
+  assert.match(action, /^author:\s*Conal/m);
+  assert.match(action, /^branding:/m);
   assert.match(action, /using:\s*['"]?composite['"]?/);
   assert.match(action, /^  repo:/m);
   assert.match(action, /^  base:/m);
   assert.match(action, /^  head:/m);
   assert.match(action, /^  fail-on:/m);
+  assert.match(action, /^  finding-count:/m);
   assert.match(action, /GITHUB_STEP_SUMMARY/);
   assert.match(action, /diff --repo/);
   assert.match(action, /--format github/);
