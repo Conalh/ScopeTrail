@@ -1,13 +1,32 @@
 # ScopeTrail
 
-Code review for AI agent permissions.
+[![CI](https://github.com/Conalh/ScopeTrail/actions/workflows/ci.yml/badge.svg)](https://github.com/Conalh/ScopeTrail/actions/workflows/ci.yml)
+[![ScopeTrail](https://github.com/Conalh/ScopeTrail/actions/workflows/scopetrail.yml/badge.svg)](https://github.com/Conalh/ScopeTrail/actions/workflows/scopetrail.yml)
+[![Release](https://img.shields.io/github/v/release/Conalh/ScopeTrail)](https://github.com/Conalh/ScopeTrail/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-ScopeTrail is an early CLI prototype that reports risky permission drift between two versions of agent configuration files. The first slice supports:
+Code review for AI agent permission drift.
+
+ScopeTrail is a free OSS CLI and GitHub Action that reviews pull requests for risky changes to AI-agent configuration files.
 
 - `.mcp.json`
 - `.claude/settings.json`
-- Terminal, Markdown, and JSON output
-- GitHub Action step summaries for pull requests
+- Terminal, Markdown, JSON, and line-level GitHub annotation output
+- GitHub Action step summaries and PR-visible warnings
+
+It is intentionally not a hosted scanner. The Action reads the checked-out repository, uploads nothing by default, and starts advisory with `fail-on: none`.
+
+## Demo
+
+Live demo PR: [Demo: risky agent permission drift](https://github.com/Conalh/ScopeTrail/pull/3)
+
+That PR intentionally adds:
+
+- A new `stripe-admin` MCP server.
+- An unpinned `@latest` MCP package.
+- Broad Claude Code rules: `Bash(npm *)` and `Read(~/**)`.
+
+ScopeTrail reports `HIGH` permission drift and emits GitHub warning annotations on the risky config lines.
 
 ## Local Use
 
@@ -50,14 +69,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Conalh/ScopeTrail@v0.1.1
+      - uses: Conalh/ScopeTrail@v0.1.3
         with:
           fail-on: none
 ```
 
-The action uploads nothing by default. It reads local git state from the checked-out repository, writes a Markdown report to the GitHub Actions step summary, and emits PR-visible warning annotations for each finding.
+The action uploads nothing by default. It reads local git state from the checked-out repository, writes a Markdown report to the GitHub Actions step summary, and emits PR-visible warning annotations for each finding. Findings point at exact config lines when ScopeTrail can resolve them.
 
 Start with `fail-on: none` so ScopeTrail is advisory while you tune policy. Raise it to `high` or `critical` once the findings are trusted.
+
+`fetch-depth: 0` is required because ScopeTrail compares the pull request base and head refs.
+
+Action outputs:
+
+- `rating`: `none`, `low`, `medium`, `high`, or `critical`
+- `finding-count`: total findings in the diff
 
 ## Current Findings
 

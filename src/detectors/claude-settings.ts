@@ -1,4 +1,4 @@
-import { configPath, isRecord, readJsonObject } from '../discovery.js';
+import { configPath, isRecord, lineOfJsonStringValue, readJsonObjectWithSource } from '../discovery.js';
 import type { Finding, Severity } from '../types.js';
 
 const CLAUDE_SETTINGS_FILE = '.claude/settings.json';
@@ -8,12 +8,13 @@ export async function detectClaudeSettingsDrift(oldRoot: string, newRoot: string
   const newSettings = await readClaudeSettings(newRoot);
   const findings: Finding[] = [];
 
-  for (const permission of newSettings.allow) {
+  for (const [permission, line] of newSettings.allow) {
     if (!oldSettings.allow.has(permission) && isBroadAllow(permission)) {
       findings.push({
         kind: 'permission_allow_widened',
         severity: severityForAllow(permission),
         file: CLAUDE_SETTINGS_FILE,
+        line,
         subject: permission,
         message: `Claude permission allowlist now includes broad access: ${permission}.`,
         recommendation: 'Prefer the narrowest command/path pattern that supports the workflow.'
@@ -21,7 +22,7 @@ export async function detectClaudeSettingsDrift(oldRoot: string, newRoot: string
     }
   }
 
-  for (const permission of oldSettings.deny) {
+  for (const permission of oldSettings.deny.keys()) {
     if (!newSettings.deny.has(permission)) {
       findings.push({
         kind: 'permission_deny_removed',
@@ -51,19 +52,20 @@ export async function detectClaudeSettingsDrift(oldRoot: string, newRoot: string
 }
 
 interface ClaudeSettingsModel {
-  allow: Set<string>;
-  deny: Set<string>;
+  allow: Map<string, number | undefined>;
+  deny: Map<string, number | undefined>;
   hooks: Set<string>;
 }
 
 async function readClaudeSettings(root: string): Promise<ClaudeSettingsModel> {
-  const json = await readJsonObject(configPath(root, CLAUDE_SETTINGS_FILE));
+  const source = await readJsonObjectWithSource(configPath(root, CLAUDE_SETTINGS_FILE));
+  const json = source.json;
   const permissions = isRecord(json.permissions) ? json.permissions : {};
   const hooks = isRecord(json.hooks) ? json.hooks : {};
 
   return {
-    allow: new Set(readStringArray(permissions.allow)),
-    deny: new Set(readStringArray(permissions.deny)),
+    allow: readStringArrayWithLines(permissions.allow, source.text),
+    deny: readStringArrayWithLines(permissions.deny, source.text),
     hooks: new Set(
       Object.entries(hooks)
         .filter(([, value]) => hookHasEntries(value))
@@ -74,6 +76,10 @@ async function readClaudeSettings(root: string): Promise<ClaudeSettingsModel> {
 
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+function readStringArrayWithLines(value: unknown, sourceText: string): Map<string, number | undefined> {
+  return new Map(readStringArray(value).map((entry) => [entry, lineOfJsonStringValue(sourceText, entry)]));
 }
 
 function hookHasEntries(value: unknown): boolean {
