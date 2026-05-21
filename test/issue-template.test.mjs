@@ -7,15 +7,13 @@ import { dirname, join } from 'node:path';
 const testDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = join(testDir, '..');
 
+async function readIssueTemplate(name) {
+  return readFile(join(packageRoot, '.github', 'ISSUE_TEMPLATE', name), 'utf8');
+}
+
 test('issue templates collect detector feedback signals', async () => {
-  const falsePositive = await readFile(
-    join(packageRoot, '.github', 'ISSUE_TEMPLATE', 'false-positive.yml'),
-    'utf8'
-  );
-  const missingSurface = await readFile(
-    join(packageRoot, '.github', 'ISSUE_TEMPLATE', 'missing-surface.yml'),
-    'utf8'
-  );
+  const falsePositive = await readIssueTemplate('false-positive.yml');
+  const missingSurface = await readIssueTemplate('missing-surface.yml');
 
   assert.match(falsePositive, /labels:\s*\["detector", "false-positive"\]/);
   assert.match(falsePositive, /id:\s*scope/);
@@ -26,4 +24,18 @@ test('issue templates collect detector feedback signals', async () => {
   assert.match(missingSurface, /id:\s*scope/);
   assert.match(missingSurface, /label:\s*Affected scope/);
   assert.match(missingSurface, /id:\s*review-surface/);
+});
+
+test('team adoption issue template collects paid-layer validation signals without promising SaaS', async () => {
+  const teamAdoption = await readIssueTemplate('team-adoption.yml');
+
+  assert.match(teamAdoption, /labels:\s*\["validation", "team-adoption"\]/);
+  assert.match(teamAdoption, /id:\s*repository-count/);
+  assert.match(teamAdoption, /label:\s*Repository count/);
+  assert.match(teamAdoption, /id:\s*agent-tools/);
+  assert.match(teamAdoption, /id:\s*permission-owner/);
+  assert.match(teamAdoption, /id:\s*trust-criteria/);
+  assert.match(teamAdoption, /id:\s*paid-workflow-pain/);
+  assert.match(teamAdoption, /product validation/i);
+  assert.doesNotMatch(teamAdoption, /SaaS is available/i);
 });

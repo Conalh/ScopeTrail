@@ -1,0 +1,44 @@
+name: Team adoption signal
+description: Share team or multi-repository ScopeTrail evaluation signals.
+title: "[team adoption]: "
+labels: ["validation", "team-adoption"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for product validation signals. ScopeTrail's paid team layer is not available yet; these reports help decide whether team workflows are painful enough to build before any hosted SaaS work begins.
+  - type: input
+    id: repository-count
+    attributes:
+      label: Repository count
+      description: How many repositories would use ScopeTrail if the fit is good?
+    validations:
+      required: true
+  - type: textarea
+    id: agent-tools
+    attributes:
+      label: Agent tools in use
+      description: List the AI-agent tools or config surfaces your team uses.
+    validations:
+      required: true
+  - type: textarea
+    id: permission-owner
+    attributes:
+      label: Permission review owner
+      description: Who reviews agent permission changes today?
+    validations:
+      required: true
+  - type: textarea
+    id: trust-criteria
+    attributes:
+      label: Trust criteria
+      description: What would make ScopeTrail trustworthy enough to keep installed?
+    validations:
+      required: true
+  - type: textarea
+    id: paid-workflow-pain
+    attributes:
+      label: Paid workflow pain
+      description: Which team-level workflow is painful enough that you would consider paying for it?
+    validations:
+      required: true
