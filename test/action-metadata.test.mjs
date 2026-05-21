@@ -18,4 +18,5 @@ test('GitHub Action metadata exposes PR drift inputs', async () => {
   assert.match(action, /^  fail-on:/m);
   assert.match(action, /GITHUB_STEP_SUMMARY/);
   assert.match(action, /diff --repo/);
+  assert.match(action, /--format github/);
 });

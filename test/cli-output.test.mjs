@@ -50,3 +50,22 @@ test('CLI emits Markdown permission drift report', async () => {
   assert.match(stdout, /Bash\(npm \*\)/);
   assert.match(stdout, /PreToolUse/);
 });
+
+test('CLI emits GitHub warning annotations for permission drift findings', async () => {
+  const oldDir = join(testDir, 'fixtures', 'combined', 'old');
+  const newDir = join(testDir, 'fixtures', 'combined', 'new');
+
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    ['dist/index.js', 'diff', '--old', oldDir, '--new', newDir, '--format', 'github'],
+    { cwd: packageRoot }
+  );
+
+  const lines = stdout.trim().split('\n');
+  assert.equal(lines.length, 6);
+  assert.match(lines[0], /^::warning file=.mcp.json,title=ScopeTrail high permission drift::/);
+  assert.match(stdout, /stripe-admin/);
+  assert.match(stdout, /Bash\(npm \*\)/);
+  assert.match(stdout, /Read\(.env\)/);
+  assert.doesNotMatch(stdout, /::error/);
+});

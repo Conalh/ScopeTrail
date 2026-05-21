@@ -69,6 +69,7 @@ runs:
 
         node "$GITHUB_ACTION_PATH/dist/index.js" diff --repo "$repo" --base "$base" --head "$head" --format markdown | tee "$report_file"
         node "$GITHUB_ACTION_PATH/dist/index.js" diff --repo "$repo" --base "$base" --head "$head" --format json > "$json_file"
+        node "$GITHUB_ACTION_PATH/dist/index.js" diff --repo "$repo" --base "$base" --head "$head" --format github
 
         if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
           cat "$report_file" >> "$GITHUB_STEP_SUMMARY"
