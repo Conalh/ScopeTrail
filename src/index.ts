@@ -2,6 +2,7 @@
 
 import { fileURLToPath } from 'node:url';
 import { detectClaudeSettingsDrift } from './detectors/claude-settings.js';
+import { detectCodexConfigDrift } from './detectors/codex-config.js';
 import { detectMcpDrift } from './detectors/mcp.js';
 import { materializeGitSnapshot } from './git-snapshot.js';
 import { createReport, renderReport, type ReportFormat } from './report.js';
@@ -30,7 +31,8 @@ async function runDiff(argv: string[]): Promise<number> {
   if (parsed.mode === 'directories') {
     const findings = [
       ...(await detectMcpDrift(parsed.oldRoot, parsed.newRoot)),
-      ...(await detectClaudeSettingsDrift(parsed.oldRoot, parsed.newRoot))
+      ...(await detectClaudeSettingsDrift(parsed.oldRoot, parsed.newRoot)),
+      ...(await detectCodexConfigDrift(parsed.oldRoot, parsed.newRoot))
     ];
     process.stdout.write(renderReport(createReport(findings), parsed.format));
     return 0;
@@ -41,7 +43,8 @@ async function runDiff(argv: string[]): Promise<number> {
   try {
     const findings = [
       ...(await detectMcpDrift(baseSnapshot.root, headSnapshot.root)),
-      ...(await detectClaudeSettingsDrift(baseSnapshot.root, headSnapshot.root))
+      ...(await detectClaudeSettingsDrift(baseSnapshot.root, headSnapshot.root)),
+      ...(await detectCodexConfigDrift(baseSnapshot.root, headSnapshot.root))
     ];
     process.stdout.write(renderReport(createReport(findings), parsed.format));
     return 0;
