@@ -1,0 +1,26 @@
+name: Missing config surface
+description: Ask ScopeTrail to support another agent config, rule file, or permission model.
+title: "[surface]: "
+labels: ["detector", "new-surface"]
+body:
+  - type: input
+    id: tool
+    attributes:
+      label: Tool or config surface
+      description: Example: Codex, Cursor, Windsurf, Gemini CLI, AGENTS.md, MCP server config.
+    validations:
+      required: true
+  - type: textarea
+    id: file-paths
+    attributes:
+      label: File paths
+      description: List the config paths ScopeTrail should inspect.
+    validations:
+      required: true
+  - type: textarea
+    id: risky-drift
+    attributes:
+      label: Risky drift examples
+      description: Describe the changes that should produce findings.
+    validations:
+      required: true
