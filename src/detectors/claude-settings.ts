@@ -1,7 +1,8 @@
 import { configPath, isRecord, lineOfJsonStringValue, readJsonObjectWithSource } from '../discovery.js';
 import type { Finding, Severity } from '../types.js';
 
-const CLAUDE_SETTINGS_FILE = '.claude/settings.json';
+export const CLAUDE_SETTINGS_FILE = '.claude/settings.json';
+export const CLAUDE_TARGET_PATHS: readonly string[] = [CLAUDE_SETTINGS_FILE];
 
 export async function detectClaudeSettingsDrift(oldRoot: string, newRoot: string): Promise<Finding[]> {
   const oldSettings = await readClaudeSettings(oldRoot);
@@ -35,8 +36,8 @@ export async function detectClaudeSettingsDrift(oldRoot: string, newRoot: string
     }
   }
 
-  for (const hookName of oldSettings.hooks) {
-    if (!newSettings.hooks.has(hookName)) {
+  for (const [hookName, oldCommands] of oldSettings.hookCommands) {
+    if (!newSettings.hookCommands.has(hookName)) {
       findings.push({
         kind: 'hook_removed',
         severity: isHighImpactHook(hookName) ? 'high' : 'medium',
@@ -44,6 +45,38 @@ export async function detectClaudeSettingsDrift(oldRoot: string, newRoot: string
         subject: hookName,
         message: `Claude hook "${hookName}" was removed.`,
         recommendation: 'Confirm the removed hook is not enforcing approval, audit logging, or policy checks.'
+      });
+      continue;
+    }
+
+    // Swapping a strict guard for a no-op script is just as material as
+    // removing the hook outright — and the previous detector missed it.
+    const newCommands = newSettings.hookCommands.get(hookName) ?? new Set<string>();
+    const changed = [...newCommands].filter((command) => !oldCommands.has(command));
+    if (changed.length > 0 && newCommands.size === oldCommands.size) {
+      findings.push({
+        kind: 'hook_command_changed',
+        severity: isHighImpactHook(hookName) ? 'high' : 'medium',
+        file: CLAUDE_SETTINGS_FILE,
+        subject: hookName,
+        message: `Claude hook "${hookName}" command(s) changed: ${changed.join(', ')}.`,
+        recommendation: 'Review the new command — a weakened guard (e.g., a no-op script) is the same risk as a removed hook.'
+      });
+    }
+  }
+
+  // Newly-added hooks aren't strictly drift in the security-loss sense,
+  // but a PR that *adds* a PreToolUse / PermissionRequest hook is a real
+  // policy event the reviewer should see. We flag it at low severity.
+  for (const hookName of newSettings.hookCommands.keys()) {
+    if (!oldSettings.hookCommands.has(hookName)) {
+      findings.push({
+        kind: 'hook_added',
+        severity: 'low',
+        file: CLAUDE_SETTINGS_FILE,
+        subject: hookName,
+        message: `Claude hook "${hookName}" was added.`,
+        recommendation: 'Confirm the new hook is the intended policy surface.'
       });
     }
   }
@@ -54,7 +87,7 @@ export async function detectClaudeSettingsDrift(oldRoot: string, newRoot: string
 interface ClaudeSettingsModel {
   allow: Map<string, number | undefined>;
   deny: Map<string, number | undefined>;
-  hooks: Set<string>;
+  hookCommands: Map<string, Set<string>>;
 }
 
 async function readClaudeSettings(root: string): Promise<ClaudeSettingsModel> {
@@ -66,12 +99,50 @@ async function readClaudeSettings(root: string): Promise<ClaudeSettingsModel> {
   return {
     allow: readStringArrayWithLines(permissions.allow, source.text),
     deny: readStringArrayWithLines(permissions.deny, source.text),
-    hooks: new Set(
-      Object.entries(hooks)
-        .filter(([, value]) => hookHasEntries(value))
-        .map(([name]) => name)
-    )
+    hookCommands: readHookCommands(hooks)
   };
+}
+
+// Each Claude Code hook entry is a list of matcher objects whose `hooks`
+// field carries the actual command strings:
+//
+//   { "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command",
+//                       "command": "/path/guard.sh" }] }] }
+//
+// We collect every command string per hook name so a PR can be checked
+// for both presence and content changes.
+function readHookCommands(hooks: Record<string, unknown>): Map<string, Set<string>> {
+  const result = new Map<string, Set<string>>();
+
+  for (const [name, value] of Object.entries(hooks)) {
+    if (!hookHasEntries(value)) {
+      continue;
+    }
+
+    const commands = new Set<string>();
+    const entries = Array.isArray(value) ? value : Object.values(value as Record<string, unknown>);
+
+    for (const entry of entries) {
+      if (!isRecord(entry)) {
+        continue;
+      }
+      const innerList = entry.hooks;
+      if (Array.isArray(innerList)) {
+        for (const inner of innerList) {
+          if (isRecord(inner) && typeof inner.command === 'string') {
+            commands.add(inner.command);
+          }
+        }
+      }
+      if (typeof entry.command === 'string') {
+        commands.add(entry.command);
+      }
+    }
+
+    result.set(name, commands);
+  }
+
+  return result;
 }
 
 function readStringArray(value: unknown): string[] {
@@ -90,13 +161,69 @@ function hookHasEntries(value: unknown): boolean {
   return isRecord(value) && Object.keys(value).length > 0;
 }
 
-function isBroadAllow(permission: string): boolean {
+// A permission only counts as broad when it grants more than a specific
+// scoped target. Scoped forms like `WebFetch(domain:example.com)` and
+// `mcp__github__get_issue` are narrow — the previous heuristic flagged
+// both as broad, which surfaced false positives on every PR that scoped
+// its grants properly. Bare tokens and explicit wildcards are still broad.
+export function isBroadAllow(permission: string): boolean {
   const normalized = permission.toLowerCase();
 
-  return /\bbash\([^)]*\*[^)]*\)/.test(normalized)
-    || /\bread\((~|[a-z]:\\|\/|\*\*)/.test(normalized)
-    || /\b(write|edit)\((~|[a-z]:\\|\/|\*\*)/.test(normalized)
-    || /\b(webfetch|websearch|mcp__|task)\(/.test(normalized);
+  if (/\bbash\([^)]*\*[^)]*\)/.test(normalized)) {
+    return true;
+  }
+  if (/\b(read|write|edit)\((~|[a-z]:\\|\/|\*\*)/.test(normalized)) {
+    return true;
+  }
+  if (isBroadVerbGrant(normalized, ['webfetch', 'websearch', 'task'])) {
+    return true;
+  }
+  if (isBroadMcpGrant(normalized)) {
+    return true;
+  }
+  return false;
+}
+
+function isBroadVerbGrant(normalized: string, verbs: string[]): boolean {
+  for (const verb of verbs) {
+    const match = new RegExp(`\\b${verb}\\b(\\([^)]*\\))?`).exec(normalized);
+    if (!match) {
+      continue;
+    }
+    const scope = match[1] ?? '';
+    if (scope === '' || scope.includes('*')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isBroadMcpGrant(normalized: string): boolean {
+  // Claude Code MCP grants follow `mcp__<server>__<tool>`. Tool names
+  // contain underscores (`get_issue`), so we have to split on the
+  // literal `__` separator rather than a character class.
+  const start = normalized.indexOf('mcp__');
+  if (start === -1) {
+    return false;
+  }
+  if (start > 0 && /[a-z0-9_]/.test(normalized[start - 1])) {
+    return false;
+  }
+
+  const rest = normalized.slice(start + 'mcp__'.length);
+  const grant = rest.match(/^[a-z0-9_*-]+/)?.[0] ?? '';
+  if (!grant) {
+    return true;
+  }
+
+  const parts = grant.split('__');
+  const server = parts[0];
+  const tool = parts.length > 1 ? parts.slice(1).join('__') : undefined;
+
+  if (!server || server.includes('*')) {
+    return true;
+  }
+  return !tool || tool.includes('*');
 }
 
 function severityForAllow(permission: string): Severity {
