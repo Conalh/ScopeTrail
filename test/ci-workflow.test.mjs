@@ -12,7 +12,8 @@ test('repository has public CI for build and tests', async () => {
 
   assert.match(workflow, /^name:\s*CI/m);
   assert.match(workflow, /^  pull_request:/m);
-  assert.match(workflow, /actions\/setup-node@v4/);
+  assert.match(workflow, /actions\/checkout@v6/);
+  assert.match(workflow, /actions\/setup-node@v6/);
   assert.match(workflow, /node-version:\s*24/);
   assert.match(workflow, /npm ci/);
   assert.match(workflow, /npm run build/);
