@@ -1,6 +1,6 @@
 {
   "name": "scopetrail",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Code review for AI agent permission drift.",
   "type": "module",
   "bin": {
