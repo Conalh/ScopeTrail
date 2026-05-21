@@ -1,5 +1,10 @@
 name: ScopeTrail
 description: Code review for AI agent permission drift in pull requests.
+author: Conal
+
+branding:
+  icon: shield
+  color: gray-dark
 
 inputs:
   repo:
@@ -23,6 +28,9 @@ outputs:
   rating:
     description: Highest ScopeTrail permission drift rating.
     value: ${{ steps.run.outputs.rating }}
+  finding-count:
+    description: Total ScopeTrail findings in the diff.
+    value: ${{ steps.run.outputs.finding-count }}
 
 runs:
   using: composite
@@ -76,7 +84,9 @@ runs:
         fi
 
         rating="$(node -e "const fs = require('node:fs'); console.log(JSON.parse(fs.readFileSync(process.argv[1], 'utf8')).rating)" "$json_file")"
+        finding_count="$(node -e "const fs = require('node:fs'); console.log(JSON.parse(fs.readFileSync(process.argv[1], 'utf8')).findingCount)" "$json_file")"
         echo "rating=$rating" >> "$GITHUB_OUTPUT"
+        echo "finding-count=$finding_count" >> "$GITHUB_OUTPUT"
 
         rank() {
           case "$1" in
