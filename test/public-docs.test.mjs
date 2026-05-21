@@ -64,3 +64,19 @@ test('public docs link the pilot issue as the active validation funnel', async (
   assert.match(validation, /active pilot issue/i);
   assert.match(validation, new RegExp(pilotIssueUrl.replaceAll('/', '\\/')));
 });
+
+test('pilot guide gives external maintainers a complete advisory trial path', async () => {
+  const readme = await readProjectFile('README.md');
+  const adoption = await readProjectFile('docs', 'ADOPTION.md');
+  const pilot = await readProjectFile('docs', 'PILOT.md');
+
+  assert.match(readme, /\[Pilot guide\]\(docs\/PILOT\.md\)/);
+  assert.match(adoption, /\[Pilot guide\]\(PILOT\.md\)/);
+  assert.match(pilot, /Conalh\/ScopeTrail@v0\.1\.6/);
+  assert.match(pilot, /fail-on:\s*none/);
+  assert.match(pilot, /3-5 pull requests/i);
+  assert.match(pilot, /https:\/\/github\.com\/Conalh\/ScopeTrail\/issues\/18/);
+  assert.match(pilot, /https:\/\/github\.com\/Conalh\/ScopeTrail\/issues\/21/);
+  assert.match(pilot, /does not count as validation evidence/i);
+  assert.match(pilot, /cross-repo visibility/i);
+});
