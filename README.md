@@ -15,6 +15,7 @@ ScopeTrail is a free OSS CLI and GitHub Action that reviews pull requests for ri
 - `.vscode/mcp.json`
 - `.codeium/windsurf/mcp_config.json`
 - `mcp_config.json.sample`, `mcp_config.json.template`, `mcp_config.json.disabled`, and `mcp_config.json.example`
+- Prefixed sample MCP configs such as `example_mcp_config.json`, `claude_mcp_config.json`, `cursor_mcp_config.json`, and `vscode_mcp_config.json`
 - `.claude/settings.json`
 - `.codex/config.toml`
 - Terminal, Markdown, JSON, and line-level GitHub annotation output
@@ -92,7 +93,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Conalh/ScopeTrail@v0.1.10
+      - uses: Conalh/ScopeTrail@v0.1.11
         with:
           fail-on: none
 ```
@@ -122,7 +123,7 @@ ScopeTrail v0 detects:
 - Cursor, VS Code, and Windsurf MCP config files using `mcpServers` or `servers` where supported.
 - Windsurf remote MCP endpoint changes through `serverUrl`.
 - Sample/template/disabled MCP config drift as a separate advisory category, not active server drift.
-- Risky copied MCP examples such as `.mcp.json.sample`, `.mcp.json.template`, `.mcp.json.disabled`, `.mcp.json.windows.example`, `.mcp.json.example.mac`, and nested `mcp_config.json.example` files with unpinned commands or remote endpoints.
+- Risky copied MCP examples such as `.mcp.json.sample`, `.mcp.json.template`, `.mcp.json.disabled`, `.mcp.json.windows.example`, `.mcp.json.example.mac`, nested `mcp_config.json.example`, and prefixed files such as `example_mcp_config.json` with unpinned commands or remote endpoints.
 - Broad Claude Code allow rules such as `Bash(npm *)` and `Read(~/**)`. Scoped grants (`WebFetch(domain:example.com)`, `mcp__github__get_issue`) are recognized as narrow and not flagged.
 - Removed Claude Code deny rules for sensitive files such as `.env`.
 - Claude Code hook changes: **removed**, **added**, and **command-changed** (a strict `PreToolUse` swapped for a no-op script is the same risk as a removal — both are now caught).

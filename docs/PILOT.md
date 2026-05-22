@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Conalh/ScopeTrail@v0.1.10
+      - uses: Conalh/ScopeTrail@v0.1.11
         with:
           fail-on: none
 ```
@@ -36,7 +36,7 @@ Useful checks during the trial:
 
 - Did ScopeTrail catch real permission drift?
 - Did any warning feel noisy or too broad?
-- Did sample/template/disabled MCP config findings, including platform-suffixed examples, correctly stay separate from active MCP server drift?
+- Did sample/template/disabled MCP config findings, including platform-suffixed and prefixed MCP config examples, correctly stay separate from active MCP server drift?
 - Did it miss an agent config surface your repository uses?
 - Would a team workflow need cross-repo visibility, policy ownership, exception workflow, or reporting?
 

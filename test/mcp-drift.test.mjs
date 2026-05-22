@@ -83,6 +83,16 @@ test('recognizes platform-suffixed MCP examples while ignoring backup files', ()
   assert.equal(isMcpSampleConfigPath('examples/.mcp.json.bak'), false);
 });
 
+test('recognizes prefixed MCP config examples while ignoring broad registry and backup names', () => {
+  assert.equal(isMcpSampleConfigPath('examples/example_mcp_config.json'), true);
+  assert.equal(isMcpSampleConfigPath('examples/claude_mcp_config.json'), true);
+  assert.equal(isMcpSampleConfigPath('examples/cursor_mcp_config.json'), true);
+  assert.equal(isMcpSampleConfigPath('examples/vscode_mcp_config.json'), true);
+  assert.equal(isMcpSampleConfigPath('examples/registry_mcp_config.json'), false);
+  assert.equal(isMcpSampleConfigPath('examples/example_mcp_config.json.bak'), false);
+  assert.equal(isMcpSampleConfigPath('dist/example_mcp_config.json'), false);
+});
+
 test('detects platform-suffixed MCP example drift without treating it as active server drift', async () => {
   const oldDir = join(testDir, 'fixtures', 'mcp-platform-sample-drift', 'old');
   const newDir = join(testDir, 'fixtures', 'mcp-platform-sample-drift', 'new');
@@ -98,6 +108,25 @@ test('detects platform-suffixed MCP example drift without treating it as active 
       ['examples/.mcp.json.example.mac', 'mcp_sample_remote_endpoint', 'mac-docs', 'medium', 4],
       ['examples/.mcp.json.windows.example', 'mcp_sample_server_added', 'win-tools', 'low', 3],
       ['examples/.mcp.json.windows.example', 'mcp_sample_unpinned_command', 'win-tools', 'medium', 7]
+    ]
+  );
+});
+
+test('detects prefixed MCP config example drift without treating it as active server drift', async () => {
+  const oldDir = join(testDir, 'fixtures', 'mcp-prefixed-sample-drift', 'old');
+  const newDir = join(testDir, 'fixtures', 'mcp-prefixed-sample-drift', 'new');
+
+  const findings = await detectMcpDrift(oldDir, newDir);
+
+  assert.equal(findings.some((finding) => finding.kind === 'mcp_server_added'), false);
+  assert.equal(findings.some((finding) => finding.kind === 'unpinned_mcp_command'), false);
+  assert.deepEqual(
+    findings.map((finding) => [finding.file, finding.kind, finding.subject, finding.severity, finding.line]),
+    [
+      ['examples/cursor_mcp_config.json', 'mcp_sample_server_added', 'cursor-docs', 'low', 3],
+      ['examples/cursor_mcp_config.json', 'mcp_sample_remote_endpoint', 'cursor-docs', 'medium', 4],
+      ['examples/example_mcp_config.json', 'mcp_sample_server_added', 'copy-risk', 'low', 3],
+      ['examples/example_mcp_config.json', 'mcp_sample_unpinned_command', 'copy-risk', 'medium', 7]
     ]
   );
 });

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "copy-risk": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@acme/copy-risk@latest"
+      ]
+    }
+  }
+}

@@ -6,7 +6,7 @@ ScopeTrail is a local-only GitHub Action and CLI for reviewing AI-agent permissi
 
 ScopeTrail reads the checked-out repository and compares supported agent configuration files between the pull request base and head refs. Supported active files include `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.codeium/windsurf/mcp_config.json`, `.claude/settings.json`, and `.codex/config.toml`.
 
-ScopeTrail also reviews sample/template/disabled MCP config files such as `.mcp.json.sample`, `.mcp.json.template`, `.mcp.json.disabled`, `.mcp.json.example`, platform-suffixed MCP example files such as `.mcp.json.windows.example` and `.mcp.json.example.mac`, and nested `mcp_config.json.example` variants. Those findings are reported separately from active MCP server drift so copied examples can be reviewed without implying they are live configuration.
+ScopeTrail also reviews sample/template/disabled MCP config files such as `.mcp.json.sample`, `.mcp.json.template`, `.mcp.json.disabled`, `.mcp.json.example`, platform-suffixed MCP example files such as `.mcp.json.windows.example` and `.mcp.json.example.mac`, nested `mcp_config.json.example` variants, and prefixed MCP config example files such as `example_mcp_config.json`, `claude_mcp_config.json`, `cursor_mcp_config.json`, and `vscode_mcp_config.json`. Those findings are reported separately from active MCP server drift so copied examples can be reviewed without implying they are live configuration.
 
 In GitHub Actions, `fetch-depth: 0` is required so ScopeTrail can compare the pull request base and head commits instead of only seeing the latest checkout.
 

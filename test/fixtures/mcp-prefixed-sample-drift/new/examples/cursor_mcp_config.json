@@ -1,0 +1,7 @@
+{
+  "servers": {
+    "cursor-docs": {
+      "url": "https://mcp.example.com/cursor"
+    }
+  }
+}
