@@ -81,3 +81,40 @@ test('codex_mcp_server_command_changed fires when an existing server changes its
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('codex_mcp_remote_endpoint: http:// fires critical severity, https:// fires high', async () => {
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-codex-http-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(join(oldDir, '.codex'), { recursive: true });
+    mkdirSync(join(newDir, '.codex'), { recursive: true });
+
+    writeFileSync(
+      join(oldDir, '.codex', 'config.toml'),
+      '[mcp_servers]\n'
+    );
+    writeFileSync(
+      join(newDir, '.codex', 'config.toml'),
+      '[mcp_servers.plain-remote]\nserverUrl = "http://mcp.example.com/insecure"\n\n[mcp_servers.tls-remote]\nserverUrl = "https://mcp.example.com/safe"\n'
+    );
+
+    const findings = await detectCodexConfigDrift(oldDir, newDir);
+    const remoteEndpoint = findings.filter((f) => f.kind === 'scope_trail.codex_mcp_remote_endpoint');
+    const bySubject = Object.fromEntries(remoteEndpoint.map((f) => [f.subject, f]));
+
+    assert.ok(bySubject['plain-remote'], 'expected active codex remote_endpoint finding for plain-remote');
+    assert.equal(bySubject['plain-remote'].severity, 'critical');
+    assert.match(bySubject['plain-remote'].message, /unencrypted/);
+
+    assert.ok(bySubject['tls-remote'], 'expected active codex remote_endpoint finding for tls-remote');
+    assert.equal(bySubject['tls-remote'].severity, 'high');
+    assert.doesNotMatch(bySubject['tls-remote'].message, /unencrypted/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+

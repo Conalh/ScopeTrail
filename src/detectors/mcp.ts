@@ -1,6 +1,13 @@
 import { readdir } from 'node:fs/promises';
 import { configPath, isRecord, lineOfJsonKey, lineOfJsonStringValue, readJsonObjectWithSource } from '../discovery.js';
-import { isPipeToShellCommand, isUnpinnedCommand, serverCommand } from '../mcp-risk.js';
+import {
+  isPipeToShellCommand,
+  isUnpinnedCommand,
+  serverCommand,
+  remoteEndpoint,
+  isRemoteEndpoint,
+  isUnencryptedEndpoint
+} from '../mcp-risk.js';
 import type { Finding, McpServerConfig, Severity } from '../types.js';
 
 const MCP_CONFIGS = [
@@ -104,6 +111,24 @@ export async function detectMcpDrift(oldRoot: string, newRoot: string): Promise<
           subject: name,
           message: `MCP server "${name}" uses an unpinned command: ${serverCommand(newServer)}.`,
           recommendation: 'Pin executable packages to an exact version and avoid pipe-to-shell installation commands.'
+        });
+      }
+
+      const endpoint = remoteEndpoint(newServer);
+      if ((!oldServer || serverCommand(newServer) !== serverCommand(oldServer)) && endpoint) {
+        const unencrypted = isUnencryptedEndpoint(endpoint);
+        findings.push({
+          kind: 'scope_trail.mcp_remote_endpoint',
+          severity: unencrypted ? 'critical' : 'high',
+          file: config.path,
+          line: lineForRemoteEndpoint(newServer) ?? newServer.line,
+          subject: name,
+          message: unencrypted
+            ? `MCP server "${name}" points at an unencrypted remote endpoint: ${endpoint}.`
+            : `MCP server "${name}" points at remote endpoint: ${endpoint}.`,
+          recommendation: unencrypted
+            ? 'Use https:// for remote MCP endpoints — prompt data and tool executions must not go over unencrypted transport.'
+            : 'Confirm the endpoint is trusted and does not expose unexpected data or tools to external hosts.'
         });
       }
     }
@@ -345,30 +370,6 @@ function lineForRemoteEndpoint(server: McpServerModel): number | undefined {
   return firstLineForValues(server, [server.url, server.serverUrl], isRemoteEndpoint);
 }
 
-function remoteEndpoint(server: McpServerModel): string | undefined {
-  return [server.url, server.serverUrl].find((value): value is string => Boolean(value && isRemoteEndpoint(value)));
-}
-
-function isRemoteEndpoint(value: string): boolean {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-      return false;
-    }
-
-    return !['localhost', '127.0.0.1', '::1'].includes(url.hostname);
-  } catch {
-    return false;
-  }
-}
-
-function isUnencryptedEndpoint(value: string): boolean {
-  try {
-    return new URL(value).protocol === 'http:';
-  } catch {
-    return false;
-  }
-}
 
 function firstLineForValues(
   server: McpServerModel,
