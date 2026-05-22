@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { detectMcpDrift } from '../dist/detectors/mcp.js';
+import { detectMcpDrift, isMcpSampleConfigPath } from '../dist/detectors/mcp.js';
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 
@@ -72,6 +72,32 @@ test('detects sample MCP config drift without treating it as active server drift
       ['examples/.mcp.json.sample', 'mcp_sample_unpinned_command', 'copy-risk', 'medium', 9],
       ['examples/.mcp.json.sample', 'mcp_sample_server_added', 'remote-admin', 'low', 11],
       ['examples/.mcp.json.sample', 'mcp_sample_remote_endpoint', 'remote-admin', 'medium', 12]
+    ]
+  );
+});
+
+test('recognizes platform-suffixed MCP examples while ignoring backup files', () => {
+  assert.equal(isMcpSampleConfigPath('examples/.mcp.json.windows.example'), true);
+  assert.equal(isMcpSampleConfigPath('examples/.mcp.json.example.mac'), true);
+  assert.equal(isMcpSampleConfigPath('examples/.mcp.json.backup'), false);
+  assert.equal(isMcpSampleConfigPath('examples/.mcp.json.bak'), false);
+});
+
+test('detects platform-suffixed MCP example drift without treating it as active server drift', async () => {
+  const oldDir = join(testDir, 'fixtures', 'mcp-platform-sample-drift', 'old');
+  const newDir = join(testDir, 'fixtures', 'mcp-platform-sample-drift', 'new');
+
+  const findings = await detectMcpDrift(oldDir, newDir);
+
+  assert.equal(findings.some((finding) => finding.kind === 'mcp_server_added'), false);
+  assert.equal(findings.some((finding) => finding.kind === 'unpinned_mcp_command'), false);
+  assert.deepEqual(
+    findings.map((finding) => [finding.file, finding.kind, finding.subject, finding.severity, finding.line]),
+    [
+      ['examples/.mcp.json.example.mac', 'mcp_sample_server_added', 'mac-docs', 'low', 3],
+      ['examples/.mcp.json.example.mac', 'mcp_sample_remote_endpoint', 'mac-docs', 'medium', 4],
+      ['examples/.mcp.json.windows.example', 'mcp_sample_server_added', 'win-tools', 'low', 3],
+      ['examples/.mcp.json.windows.example', 'mcp_sample_unpinned_command', 'win-tools', 'medium', 7]
     ]
   );
 });

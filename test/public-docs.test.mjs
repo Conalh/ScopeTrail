@@ -38,8 +38,10 @@ test('public docs describe active and sample MCP config coverage', async () => {
 
   assert.match(readme, /sample\/template\/disabled MCP config drift/i);
   assert.match(readme, /\.mcp\.json\.sample/);
+  assert.match(readme, /\.mcp\.json\.windows\.example/);
   assert.match(readme, /mcp_config\.json\.example/);
   assert.match(trust, /sample\/template\/disabled MCP config files/i);
+  assert.match(trust, /platform-suffixed MCP example files/i);
   assert.match(pilot, /sample\/template\/disabled MCP config findings/i);
 });
 

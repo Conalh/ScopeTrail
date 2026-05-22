@@ -20,6 +20,19 @@ const MCP_SAMPLE_CONFIG_FILENAMES = new Set([
   'mcp_config.json.example'
 ]);
 
+const MCP_EXAMPLE_BASE_FILENAMES = ['.mcp.json', 'mcp_config.json'] as const;
+
+const MCP_PLATFORM_EXAMPLE_QUALIFIERS = new Set([
+  'darwin',
+  'linux',
+  'mac',
+  'macos',
+  'osx',
+  'win',
+  'win32',
+  'windows'
+]);
+
 const IGNORED_SAMPLE_SCAN_DIRS = new Set([
   '.git',
   'node_modules',
@@ -187,7 +200,25 @@ export function isMcpSampleConfigPath(relativePath: string): boolean {
   }
 
   const fileName = segments.at(-1);
-  return fileName ? MCP_SAMPLE_CONFIG_FILENAMES.has(fileName) : false;
+  return fileName
+    ? MCP_SAMPLE_CONFIG_FILENAMES.has(fileName) || isPlatformSuffixedMcpExampleFileName(fileName)
+    : false;
+}
+
+function isPlatformSuffixedMcpExampleFileName(fileName: string): boolean {
+  for (const baseName of MCP_EXAMPLE_BASE_FILENAMES) {
+    const prefix = `${baseName}.`;
+    if (!fileName.startsWith(prefix)) {
+      continue;
+    }
+
+    const qualifiers = fileName.slice(prefix.length).split('.').map((segment) => segment.toLowerCase());
+    return qualifiers.length > 1
+      && qualifiers.includes('example')
+      && qualifiers.every((segment) => segment === 'example' || MCP_PLATFORM_EXAMPLE_QUALIFIERS.has(segment));
+  }
+
+  return false;
 }
 
 async function listMcpSampleConfigPaths(...roots: string[]): Promise<string[]> {
