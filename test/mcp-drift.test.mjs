@@ -6,6 +6,46 @@ import { detectMcpDrift, isMcpSampleConfigPath } from '../dist/detectors/mcp.js'
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 
+test('mcp_sample_remote_endpoint: http:// fires high severity, https:// stays medium', async () => {
+  // A copy-pasted sample config with an http:// endpoint silently
+  // hands the user an unencrypted MCP transport. https:// is the
+  // safer baseline; flag the http:// asymmetry distinctly.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-http-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(join(oldDir, 'examples'), { recursive: true });
+    mkdirSync(join(newDir, 'examples'), { recursive: true });
+    writeFileSync(join(oldDir, 'examples', '.mcp.json.sample'), JSON.stringify({ mcpServers: {} }));
+    writeFileSync(
+      join(newDir, 'examples', '.mcp.json.sample'),
+      JSON.stringify({
+        mcpServers: {
+          'plain-remote': { serverUrl: 'http://mcp.example.com/insecure' },
+          'tls-remote': { serverUrl: 'https://mcp.example.com/safe' }
+        }
+      }, null, 2)
+    );
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    const remoteEndpoint = findings.filter((f) => f.kind === 'scope_trail.mcp_sample_remote_endpoint');
+    const bySubject = Object.fromEntries(remoteEndpoint.map((f) => [f.subject, f]));
+
+    assert.ok(bySubject['plain-remote'], 'expected remote_endpoint finding for plain-remote');
+    assert.equal(bySubject['plain-remote'].severity, 'high');
+    assert.match(bySubject['plain-remote'].message, /unencrypted/);
+
+    assert.ok(bySubject['tls-remote'], 'expected remote_endpoint finding for tls-remote');
+    assert.equal(bySubject['tls-remote'].severity, 'medium');
+    assert.doesNotMatch(bySubject['tls-remote'].message, /unencrypted/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('isUnpinnedCommand flags bunx packages without exact versions', async () => {
   // bunx is the Bun equivalent of npx and ships as a standalone
   // binary, so MCP configs use `"command": "bunx"` directly. Prior
