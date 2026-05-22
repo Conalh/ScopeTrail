@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { CLAUDE_TARGET_PATHS } from './detectors/claude-settings.js';
 import { CODEX_TARGET_PATHS } from './detectors/codex-config.js';
-import { MCP_TARGET_PATHS } from './detectors/mcp.js';
+import { MCP_TARGET_PATHS, isMcpSampleConfigPath } from './detectors/mcp.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -31,7 +31,7 @@ export async function materializeGitSnapshot(repo: string, ref: string): Promise
   const root = await mkdtemp(join(tmpdir(), 'scopetrail-snapshot-'));
   let completed = false;
   try {
-    for (const relativePath of SNAPSHOT_PATHS) {
+    for (const relativePath of await snapshotPathsForRef(repo, ref)) {
       const content = await readPathAtRef(repo, ref, relativePath);
       if (content === null) {
         continue;
@@ -56,8 +56,27 @@ export async function materializeGitSnapshot(repo: string, ref: string): Promise
   }
 }
 
+async function snapshotPathsForRef(repo: string, ref: string): Promise<string[]> {
+  const paths = new Set(SNAPSHOT_PATHS);
+  for (const relativePath of await listPathsAtRef(repo, ref)) {
+    if (isMcpSampleConfigPath(relativePath)) {
+      paths.add(relativePath);
+    }
+  }
+
+  return [...paths].sort();
+}
+
 async function verifyGitRef(repo: string, ref: string): Promise<void> {
   await execFileAsync('git', ['-C', repo, 'rev-parse', '--verify', `${ref}^{commit}`]);
+}
+
+async function listPathsAtRef(repo: string, ref: string): Promise<string[]> {
+  const { stdout } = await execFileAsync('git', ['-C', repo, 'ls-tree', '-r', '--name-only', ref], {
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024
+  });
+  return stdout.split(/\r?\n/).filter(Boolean);
 }
 
 async function readPathAtRef(repo: string, ref: string, relativePath: string): Promise<string | null> {

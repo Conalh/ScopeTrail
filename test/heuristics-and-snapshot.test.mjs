@@ -20,12 +20,13 @@ const codexDetector = await import(pathToFileURL(join(distRoot, 'detectors', 'co
 const { isBroadAllow, detectClaudeSettingsDrift } = claudeSettings;
 const { SNAPSHOT_PATHS } = gitSnapshot;
 
-test('SNAPSHOT_PATHS covers every path each detector reads (regression)', () => {
+test('SNAPSHOT_PATHS covers every fixed path each detector reads (regression)', () => {
   // Real bug observed before this PR: git-snapshot only listed
   // .mcp.json and .claude/settings.json, so the Action silently missed
   // .cursor/mcp.json, .vscode/mcp.json, .codeium/windsurf/mcp_config.json,
   // and .codex/config.toml. This test fails loudly if a detector adds a
-  // target path and the snapshot list isn't updated to match.
+  // fixed target path and the snapshot list isn't updated to match.
+  // Dynamic sample MCP paths are covered by the git-diff fixture test.
   const required = new Set([
     ...mcpDetector.MCP_TARGET_PATHS,
     ...claudeSettings.CLAUDE_TARGET_PATHS,

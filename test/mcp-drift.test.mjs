@@ -55,3 +55,23 @@ test('detects MCP drift in Windsurf config files', async () => {
     ]
   );
 });
+
+test('detects sample MCP config drift without treating it as active server drift', async () => {
+  const oldDir = join(testDir, 'fixtures', 'mcp-sample-drift', 'old');
+  const newDir = join(testDir, 'fixtures', 'mcp-sample-drift', 'new');
+
+  const findings = await detectMcpDrift(oldDir, newDir);
+
+  assert.equal(findings.some((finding) => finding.kind === 'mcp_server_added'), false);
+  assert.equal(findings.some((finding) => finding.kind === 'unpinned_mcp_command'), false);
+  assert.deepEqual(
+    findings.map((finding) => [finding.file, finding.kind, finding.subject, finding.severity, finding.line]),
+    [
+      ['examples/.mcp.json.sample', 'mcp_sample_server_added', 'docs-search', 'low', 3],
+      ['examples/.mcp.json.sample', 'mcp_sample_server_added', 'copy-risk', 'low', 7],
+      ['examples/.mcp.json.sample', 'mcp_sample_unpinned_command', 'copy-risk', 'medium', 9],
+      ['examples/.mcp.json.sample', 'mcp_sample_server_added', 'remote-admin', 'low', 11],
+      ['examples/.mcp.json.sample', 'mcp_sample_remote_endpoint', 'remote-admin', 'medium', 12]
+    ]
+  );
+});
