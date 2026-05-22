@@ -6,6 +6,38 @@ import { detectMcpDrift, isMcpSampleConfigPath } from '../dist/detectors/mcp.js'
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 
+test('isUnpinnedCommand flags bunx packages without exact versions', async () => {
+  // bunx is the Bun equivalent of npx and ships as a standalone
+  // binary, so MCP configs use `"command": "bunx"` directly. Prior
+  // to this regression test the runner list was npx/uvx/pipx only.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-bunx-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(newDir, { recursive: true });
+    writeFileSync(join(oldDir, '.mcp.json'), JSON.stringify({ mcpServers: {} }));
+    writeFileSync(
+      join(newDir, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          'bun-helper': { command: 'bunx', args: ['@vendor/helper-mcp'] }
+        }
+      })
+    );
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    const unpinned = findings.find((finding) => finding.kind === 'scope_trail.unpinned_mcp_command');
+    assert.ok(unpinned, 'expected unpinned_mcp_command for bunx without exact version');
+    assert.equal(unpinned.subject, 'bun-helper');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('detects added MCP server with unpinned command', async () => {
   const oldDir = join(testDir, 'fixtures', 'mcp-drift', 'old');
   const newDir = join(testDir, 'fixtures', 'mcp-drift', 'new');

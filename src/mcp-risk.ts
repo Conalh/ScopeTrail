@@ -36,7 +36,12 @@ export function isUnpinnedCommand(spec: McpCommandShape): boolean {
   }
 
   const packageLikeArgs = spec.args ?? [];
-  return ['npx', 'uvx', 'pipx'].includes((spec.command ?? '').toLowerCase())
+  // `bunx` is Bun's npx equivalent and ships as its own binary, so it
+  // surfaces as `command: "bunx"` in MCP configs. `yarn dlx` / `npm exec`
+  // / `pnpm dlx` are deliberately NOT added here — those would have
+  // `command: "yarn"` (etc.) with the subcommand in args[0], and need
+  // a structurally different check that this heuristic doesn't do.
+  return ['npx', 'uvx', 'pipx', 'bunx'].includes((spec.command ?? '').toLowerCase())
     && packageLikeArgs.some((arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
 }
 

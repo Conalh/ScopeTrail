@@ -252,19 +252,25 @@ async function collectMcpSampleConfigPaths(root: string, relativeDir: string, pa
     throw error;
   }
 
-  for (const entry of entries) {
-    const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) {
-      if (!IGNORED_SAMPLE_SCAN_DIRS.has(entry.name)) {
-        await collectMcpSampleConfigPaths(root, relativePath, paths);
+  // Walk subdirectories in parallel. Each `readdir` is independent
+  // and `paths` is a Set mutated from the same event loop, so add
+  // operations are race-free in single-threaded Node. The caller
+  // already sorts the result, so insertion order doesn't matter.
+  await Promise.all(
+    entries.map(async (entry) => {
+      const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (!IGNORED_SAMPLE_SCAN_DIRS.has(entry.name)) {
+          await collectMcpSampleConfigPaths(root, relativePath, paths);
+        }
+        return;
       }
-      continue;
-    }
 
-    if (entry.isFile() && isMcpSampleConfigPath(relativePath)) {
-      paths.add(relativePath);
-    }
-  }
+      if (entry.isFile() && isMcpSampleConfigPath(relativePath)) {
+        paths.add(relativePath);
+      }
+    })
+  );
 }
 
 function readServerMap(json: Record<string, unknown>, serverKeys: readonly string[]): unknown {
