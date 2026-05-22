@@ -31,7 +31,7 @@ test('public Action install tags match package version', async () => {
   const version = packageJson.version;
   const installTagPattern = new RegExp(`Conalh/ScopeTrail@v${version.replaceAll('.', '\\.')}`);
 
-  assert.equal(version, '0.1.7');
+  assert.equal(version, '0.1.8');
   assert.match(readme, installTagPattern);
   assert.match(pilotGuide, installTagPattern);
 });
