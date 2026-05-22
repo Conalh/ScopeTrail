@@ -36,6 +36,7 @@ Useful checks during the trial:
 
 - Did ScopeTrail catch real permission drift?
 - Did any warning feel noisy or too broad?
+- Did sample/template/disabled MCP config findings correctly stay separate from active MCP server drift?
 - Did it miss an agent config surface your repository uses?
 - Would a team workflow need cross-repo visibility, policy ownership, exception workflow, or reporting?
 

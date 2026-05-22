@@ -4,7 +4,9 @@ ScopeTrail is a local-only GitHub Action and CLI for reviewing AI-agent permissi
 
 ## What It Reads
 
-ScopeTrail reads the checked-out repository and compares supported agent configuration files between the pull request base and head refs. Supported files include `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.codeium/windsurf/mcp_config.json`, `.claude/settings.json`, and `.codex/config.toml`.
+ScopeTrail reads the checked-out repository and compares supported agent configuration files between the pull request base and head refs. Supported active files include `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.codeium/windsurf/mcp_config.json`, `.claude/settings.json`, and `.codex/config.toml`.
+
+ScopeTrail also reviews sample/template/disabled MCP config files such as `.mcp.json.sample`, `.mcp.json.template`, `.mcp.json.disabled`, `.mcp.json.example`, and nested `mcp_config.json.example` variants. Those findings are reported separately from active MCP server drift so copied examples can be reviewed without implying they are live configuration.
 
 In GitHub Actions, `fetch-depth: 0` is required so ScopeTrail can compare the pull request base and head commits instead of only seeing the latest checkout.
 

@@ -31,6 +31,18 @@ test('trust doc describes local-only advisory GitHub Action behavior', async () 
   assert.match(trust, /does not provide a security guarantee/i);
 });
 
+test('public docs describe active and sample MCP config coverage', async () => {
+  const readme = await readProjectFile('README.md');
+  const trust = await readProjectFile('docs', 'TRUST.md');
+  const pilot = await readProjectFile('docs', 'PILOT.md');
+
+  assert.match(readme, /sample\/template\/disabled MCP config drift/i);
+  assert.match(readme, /\.mcp\.json\.sample/);
+  assert.match(readme, /mcp_config\.json\.example/);
+  assert.match(trust, /sample\/template\/disabled MCP config files/i);
+  assert.match(pilot, /sample\/template\/disabled MCP config findings/i);
+});
+
 test('adoption checklist defines advisory-first rollout and feedback path', async () => {
   const adoption = await readProjectFile('docs', 'ADOPTION.md');
 
