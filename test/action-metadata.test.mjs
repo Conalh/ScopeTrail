@@ -24,6 +24,16 @@ test('GitHub Action metadata exposes PR drift inputs', async () => {
   assert.match(action, /--format github/);
 });
 
+test('GitHub Action uses committed runtime without installing dependencies in consumer workflows', async () => {
+  const action = await readFile(join(packageRoot, 'action.yml'), 'utf8');
+  const gitignore = await readFile(join(packageRoot, '.gitignore'), 'utf8');
+
+  assert.match(action, /node "\$GITHUB_ACTION_PATH\/dist\/index\.js" diff --repo/);
+  assert.doesNotMatch(action, /npm ci/);
+  assert.doesNotMatch(action, /npm run build/);
+  assert.doesNotMatch(gitignore, /^dist\/$/m);
+});
+
 test('public Action install tags match package version', async () => {
   const readme = await readFile(join(packageRoot, 'README.md'), 'utf8');
   const pilotGuide = await readFile(join(packageRoot, 'docs', 'PILOT.md'), 'utf8');
@@ -31,7 +41,7 @@ test('public Action install tags match package version', async () => {
   const version = packageJson.version;
   const installTagPattern = new RegExp(`Conalh/ScopeTrail@v${version.replaceAll('.', '\\.')}`);
 
-  assert.equal(version, '0.1.9');
+  assert.equal(version, '0.1.10');
   assert.match(readme, installTagPattern);
   assert.match(pilotGuide, installTagPattern);
 });

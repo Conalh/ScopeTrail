@@ -1,0 +1,84 @@
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { promisify } from 'node:util';
+import { CLAUDE_TARGET_PATHS } from './detectors/claude-settings.js';
+import { CODEX_TARGET_PATHS } from './detectors/codex-config.js';
+import { MCP_TARGET_PATHS, isMcpSampleConfigPath } from './detectors/mcp.js';
+const execFileAsync = promisify(execFile);
+// Union of every config path the detectors read. Sourced from each
+// detector module so adding a new surface in one place can never leave
+// the git-mode snapshot blind to it (the previous hard-coded list missed
+// .cursor/mcp.json, .vscode/mcp.json, .codeium/windsurf/mcp_config.json,
+// and .codex/config.toml — silently, in the actual GitHub Action path).
+export const SNAPSHOT_PATHS = [
+    ...MCP_TARGET_PATHS,
+    ...CLAUDE_TARGET_PATHS,
+    ...CODEX_TARGET_PATHS
+];
+export async function materializeGitSnapshot(repo, ref) {
+    await verifyGitRef(repo, ref);
+    const root = await mkdtemp(join(tmpdir(), 'scopetrail-snapshot-'));
+    let completed = false;
+    try {
+        for (const relativePath of await snapshotPathsForRef(repo, ref)) {
+            const content = await readPathAtRef(repo, ref, relativePath);
+            if (content === null) {
+                continue;
+            }
+            const targetPath = join(root, relativePath);
+            await mkdir(dirname(targetPath), { recursive: true });
+            await writeFile(targetPath, content);
+        }
+        completed = true;
+        return {
+            root,
+            cleanup: async () => {
+                await rm(root, { recursive: true, force: true });
+            }
+        };
+    }
+    finally {
+        if (!completed) {
+            await rm(root, { recursive: true, force: true });
+        }
+    }
+}
+async function snapshotPathsForRef(repo, ref) {
+    const paths = new Set(SNAPSHOT_PATHS);
+    for (const relativePath of await listPathsAtRef(repo, ref)) {
+        if (isMcpSampleConfigPath(relativePath)) {
+            paths.add(relativePath);
+        }
+    }
+    return [...paths].sort();
+}
+async function verifyGitRef(repo, ref) {
+    await execFileAsync('git', ['-C', repo, 'rev-parse', '--verify', `${ref}^{commit}`]);
+}
+async function listPathsAtRef(repo, ref) {
+    const { stdout } = await execFileAsync('git', ['-C', repo, 'ls-tree', '-r', '--name-only', ref], {
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024
+    });
+    return stdout.split(/\r?\n/).filter(Boolean);
+}
+async function readPathAtRef(repo, ref, relativePath) {
+    try {
+        const { stdout } = await execFileAsync('git', ['-C', repo, 'show', `${ref}:${relativePath}`], {
+            encoding: 'utf8',
+            maxBuffer: 10 * 1024 * 1024
+        });
+        return stdout;
+    }
+    catch (error) {
+        if (isExecError(error)) {
+            return null;
+        }
+        throw error;
+    }
+}
+function isExecError(error) {
+    return error instanceof Error && 'code' in error;
+}

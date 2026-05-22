@@ -18,6 +18,8 @@ test('README links trust, adoption, and team validation docs from the public Act
   assert.match(readme, /\[Adoption checklist\]\(docs\/ADOPTION\.md\)/);
   assert.match(readme, /\[Team-layer validation\]\(docs\/TEAM_VALIDATION\.md\)/);
   assert.match(readme, /install with `fail-on: none`/i);
+  assert.match(readme, /runs the committed `dist\/` runtime/i);
+  assert.match(readme, /does not run `npm ci` or `npm run build`/i);
 });
 
 test('trust doc describes local-only advisory GitHub Action behavior', async () => {
@@ -25,6 +27,8 @@ test('trust doc describes local-only advisory GitHub Action behavior', async () 
 
   assert.match(trust, /reads the checked-out repository/i);
   assert.match(trust, /uploads nothing by default/i);
+  assert.match(trust, /runs the committed `dist\/` runtime/i);
+  assert.match(trust, /does not run `npm ci` or `npm run build` in the installing repository/i);
   assert.match(trust, /permissions:\s*`contents: read`/i);
   assert.match(trust, /`fetch-depth: 0`/);
   assert.match(trust, /`fail-on: none`/);
