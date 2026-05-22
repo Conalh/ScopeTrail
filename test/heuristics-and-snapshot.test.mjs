@@ -68,6 +68,32 @@ test('isBroadAllow: bare Bash/Read/Write/Edit ARE broad (regression for security
   assert.equal(isBroadAllow('Edit'), true);
 });
 
+test('Claude detector: malformed settings.json surfaces a finding instead of crashing', async () => {
+  // Pre-fix gap: invalid JSON propagated SyntaxError out of the
+  // detector and crashed the CLI before any report could render.
+  // Now: high-severity claude_settings_syntax_error finding.
+  const { mkdtemp, mkdir, rm, writeFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+
+  const root = await mkdtemp(join(tmpdir(), 'scopetrail-claude-malformed-'));
+  try {
+    const oldRoot = join(root, 'old');
+    const newRoot = join(root, 'new');
+    await mkdir(join(oldRoot, '.claude'), { recursive: true });
+    await mkdir(join(newRoot, '.claude'), { recursive: true });
+    await writeFile(join(oldRoot, '.claude', 'settings.json'), JSON.stringify({ permissions: { allow: [], deny: [] } }));
+    await writeFile(join(newRoot, '.claude', 'settings.json'), '{ "permissions": { "allow": ["Bash"], ');
+
+    const findings = await detectClaudeSettingsDrift(oldRoot, newRoot);
+    assert.equal(findings.length, 1, 'malformed settings.json should produce exactly one syntax_error finding');
+    assert.equal(findings[0].kind, 'scope_trail.claude_settings_syntax_error');
+    assert.equal(findings[0].severity, 'high');
+    assert.match(findings[0].message, /failed to parse/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('Claude detector: bare Bash/Write/Edit get high severity (not medium)', async () => {
   // Pre-fix gap: `severityForAllow` required the opening paren
   // (`bash(`, `write(`, `edit(`) to assign `high`, so bare `"Bash"`

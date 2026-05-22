@@ -91,7 +91,10 @@ export function isRemoteEndpoint(value: string): boolean {
       return false;
     }
 
-    return !['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+    // Node's URL parser returns IPv6 hostnames with surrounding
+    // brackets (`new URL('http://[::1]:3000').hostname === '[::1]'`),
+    // so `'::1'` alone never matched. Include both forms.
+    return !['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
   } catch {
     return false;
   }

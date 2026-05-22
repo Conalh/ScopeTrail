@@ -6,6 +6,73 @@ import { detectMcpDrift, isMcpSampleConfigPath } from '../dist/detectors/mcp.js'
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 
+test('mcp_config_syntax_error: malformed .mcp.json surfaces a finding instead of crashing the CLI', async () => {
+  // Pre-fix gap: JSON.parse errors escaped from readJsonObjectWithSource
+  // and the CLI exited 1 with a raw SyntaxError, bypassing the report
+  // pipeline and fail-on semantics entirely. Now: detector returns a
+  // high-severity finding and the report renders normally.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-malformed-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(newDir, { recursive: true });
+    writeFileSync(join(oldDir, '.mcp.json'), JSON.stringify({ mcpServers: {} }));
+    // Trailing comma + unterminated object — invalid JSON.
+    writeFileSync(join(newDir, '.mcp.json'), '{ "mcpServers": { "evil": { "command": "npx", "args": ["@vendor/bad@latest"], }');
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    const syntaxError = findings.find((f) => f.kind === 'scope_trail.mcp_config_syntax_error');
+    assert.ok(syntaxError, 'expected mcp_config_syntax_error finding');
+    assert.equal(syntaxError.severity, 'high');
+    assert.equal(syntaxError.file, '.mcp.json');
+    assert.match(syntaxError.message, /failed to parse/);
+
+    // No false-positive "added" findings for the half-parsed evil server.
+    const evilAdded = findings.find((f) => f.kind === 'scope_trail.mcp_server_added' && f.subject === 'evil');
+    assert.equal(evilAdded, undefined, 'malformed config should not fire false mcp_server_added');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('mcp_remote_endpoint: IPv6 loopback [::1] is excluded as local, not flagged as remote', async () => {
+  // Node's URL parser returns IPv6 hostnames with brackets
+  // (`new URL('http://[::1]:3000').hostname === '[::1]'`), so the
+  // previous exclusion list of `['localhost', '127.0.0.1', '::1']`
+  // never matched the bracketed form. Local IPv6 MCP endpoints
+  // were getting flagged as remote.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-ipv6-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(newDir, { recursive: true });
+    writeFileSync(join(oldDir, '.mcp.json'), JSON.stringify({ mcpServers: {} }));
+    writeFileSync(
+      join(newDir, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          'ipv6-local': { serverUrl: 'http://[::1]:3000/mcp' },
+          'ipv4-local': { serverUrl: 'http://127.0.0.1:3000/mcp' }
+        }
+      })
+    );
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    const remoteFindings = findings.filter((f) => f.kind === 'scope_trail.mcp_remote_endpoint');
+    assert.equal(remoteFindings.length, 0, 'IPv6/IPv4 loopback should not fire remote-endpoint findings');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('mcp_sample_remote_endpoint: http:// fires high severity, https:// stays medium', async () => {
   // A copy-pasted sample config with an http:// endpoint silently
   // hands the user an unencrypted MCP transport. https:// is the

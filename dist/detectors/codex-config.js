@@ -5,6 +5,24 @@ import { isUnpinnedCommand, serverCommand, remoteEndpoint, isUnencryptedEndpoint
 export const CODEX_CONFIG_FILE = '.codex/config.toml';
 export const CODEX_TARGET_PATHS = [CODEX_CONFIG_FILE];
 export async function detectCodexConfigDrift(oldRoot, newRoot) {
+    // Detect a malformed new .codex/config.toml up front. The previous
+    // behavior was to silently swallow the TOML parse error and return
+    // an empty MCP server map, which let a hand-edited config that
+    // contained risky settings produce a clean "rating: none" report.
+    // Surface as a high-severity finding and skip the rest of the
+    // detector — diffing against a partially-parsed file would just
+    // produce noise.
+    const newParseError = await readCodexParseError(newRoot);
+    if (newParseError) {
+        return [{
+                kind: 'scope_trail.codex_config_syntax_error',
+                severity: 'high',
+                file: CODEX_CONFIG_FILE,
+                subject: CODEX_CONFIG_FILE,
+                message: `Codex config "${CODEX_CONFIG_FILE}" failed to parse: ${newParseError.message}`,
+                recommendation: 'Fix the TOML syntax. ScopeTrail cannot reason about sandbox, approval, or MCP drift while the file is invalid.'
+            }];
+    }
     const oldConfig = await readCodexConfig(oldRoot);
     const newConfig = await readCodexConfig(newRoot);
     const findings = [];
@@ -51,23 +69,79 @@ export async function detectCodexConfigDrift(oldRoot, newRoot) {
             });
         }
     }
-    const oldTrust = oldConfig.get('projects.trust_level');
-    const newTrust = newConfig.get('projects.trust_level');
-    if (newTrust?.value === 'trusted' && oldTrust?.value !== 'trusted') {
-        findings.push({
-            kind: 'scope_trail.codex_project_trusted',
-            severity: 'high',
-            file: CODEX_CONFIG_FILE,
-            line: newTrust.line,
-            subject: 'projects.trust_level',
-            message: 'Codex project trust level was changed to trusted.',
-            recommendation: 'Only mark projects trusted when repository instructions, hooks, and tool permissions are reviewed.'
-        });
+    // Per-project trust-level detection. The legacy regex parser
+    // collapsed every `[projects.<path>]` section to a single `projects`
+    // bucket, so multiple project paths fought over one Map key — adding
+    // a *second* trusted project went undetected when a first trusted
+    // project already existed. Iterate the parsed TOML's `projects`
+    // object directly so each path is checked independently.
+    const oldTrustedProjects = await readTrustedProjects(oldRoot);
+    const newTrustedProjects = await readTrustedProjects(newRoot);
+    for (const projectPath of newTrustedProjects) {
+        if (!oldTrustedProjects.has(projectPath)) {
+            findings.push({
+                kind: 'scope_trail.codex_project_trusted',
+                severity: 'high',
+                file: CODEX_CONFIG_FILE,
+                line: lineOfTomlKey(await readCodexText(newRoot), `projects.${projectPath}.trust_level`) || undefined,
+                subject: `projects.${projectPath}.trust_level`,
+                message: `Codex project "${projectPath}" was marked trusted.`,
+                recommendation: 'Only mark projects trusted when repository instructions, hooks, and tool permissions are reviewed.'
+            });
+        }
     }
     for (const finding of await detectCodexMcpDrift(oldRoot, newRoot)) {
         findings.push(finding);
     }
     return findings;
+}
+async function readCodexText(root) {
+    try {
+        return await readFile(configPath(root, CODEX_CONFIG_FILE), 'utf8');
+    }
+    catch (error) {
+        if (isNodeError(error) && error.code === 'ENOENT') {
+            return '';
+        }
+        throw error;
+    }
+}
+async function readCodexParseError(root) {
+    const text = await readCodexText(root);
+    if (!text) {
+        return undefined;
+    }
+    try {
+        parseToml(text);
+        return undefined;
+    }
+    catch (error) {
+        return error instanceof Error ? error : new Error(String(error));
+    }
+}
+async function readTrustedProjects(root) {
+    const text = await readCodexText(root);
+    if (!text) {
+        return new Set();
+    }
+    let parsed;
+    try {
+        parsed = parseToml(text);
+    }
+    catch {
+        return new Set();
+    }
+    const projects = parsed.projects;
+    if (!isPlainObject(projects)) {
+        return new Set();
+    }
+    const trusted = new Set();
+    for (const [name, entry] of Object.entries(projects)) {
+        if (isPlainObject(entry) && entry.trust_level === 'trusted') {
+            trusted.add(name);
+        }
+    }
+    return trusted;
 }
 // Codex `.codex/config.toml` carries the same `[mcp_servers.NAME]`
 // shape that ScopeTrail already flags in `.mcp.json` — without this
