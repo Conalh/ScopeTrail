@@ -78,6 +78,41 @@ test('isUnpinnedCommand flags bunx packages without exact versions', async () =>
   }
 });
 
+test('isUnpinnedCommand flags npm exec / yarn dlx / pnpm dlx packages without exact versions', async () => {
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-npm-exec-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(newDir, { recursive: true });
+    writeFileSync(join(oldDir, '.mcp.json'), JSON.stringify({ mcpServers: {} }));
+    writeFileSync(
+      join(newDir, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          'npm-helper': { command: 'npm', args: ['exec', '@vendor/helper-mcp'] },
+          'yarn-helper': { command: 'yarn', args: ['dlx', '@vendor/helper-mcp'] },
+          'pnpm-helper': { command: 'pnpm', args: ['dlx', '@vendor/helper-mcp'] }
+        }
+      })
+    );
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    const unpinned = findings.filter((finding) => finding.kind === 'scope_trail.unpinned_mcp_command');
+    const subjects = unpinned.map((f) => f.subject);
+
+    assert.ok(subjects.includes('npm-helper'), 'expected unpinned finding for npm-helper');
+    assert.ok(subjects.includes('yarn-helper'), 'expected unpinned finding for yarn-helper');
+    assert.ok(subjects.includes('pnpm-helper'), 'expected unpinned finding for pnpm-helper');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
 test('detects added MCP server with unpinned command', async () => {
   const oldDir = join(testDir, 'fixtures', 'mcp-drift', 'old');
   const newDir = join(testDir, 'fixtures', 'mcp-drift', 'new');

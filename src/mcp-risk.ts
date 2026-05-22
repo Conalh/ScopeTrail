@@ -36,12 +36,27 @@ export function isUnpinnedCommand(spec: McpCommandShape): boolean {
   }
 
   const packageLikeArgs = spec.args ?? [];
+  const cmd = (spec.command ?? '').toLowerCase();
+
+  if (['npm', 'yarn', 'pnpm'].includes(cmd) && packageLikeArgs.length > 1) {
+    const sub = packageLikeArgs[0].toLowerCase();
+    const isExecutor = (cmd === 'npm' && (sub === 'exec' || sub === 'x')) ||
+                       (cmd === 'yarn' && sub === 'dlx') ||
+                       (cmd === 'pnpm' && (sub === 'dlx' || sub === 'exec' || sub === 'x'));
+    if (isExecutor) {
+      const packageArgs = packageLikeArgs.slice(1).filter((arg) => !arg.startsWith('-'));
+      if (packageArgs.length > 0) {
+        const pkg = packageArgs[0];
+        if (looksLikePackageName(pkg) && !hasExactVersion(pkg)) {
+          return true;
+        }
+      }
+    }
+  }
+
   // `bunx` is Bun's npx equivalent and ships as its own binary, so it
-  // surfaces as `command: "bunx"` in MCP configs. `yarn dlx` / `npm exec`
-  // / `pnpm dlx` are deliberately NOT added here — those would have
-  // `command: "yarn"` (etc.) with the subcommand in args[0], and need
-  // a structurally different check that this heuristic doesn't do.
-  return ['npx', 'uvx', 'pipx', 'bunx'].includes((spec.command ?? '').toLowerCase())
+  // surfaces as `command: "bunx"` in MCP configs.
+  return ['npx', 'uvx', 'pipx', 'bunx'].includes(cmd)
     && packageLikeArgs.some((arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
 }
 
