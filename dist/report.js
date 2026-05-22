@@ -57,7 +57,7 @@ function renderMarkdown(report) {
     return `${lines.join('\n').trimEnd()}\n`;
 }
 function appendPilotFeedback(lines) {
-    lines.push('', '## Pilot feedback', '', 'Trying ScopeTrail in advisory mode? Report whether this run was useful, noisy, or missing an agent config surface:', '', 'https://github.com/Conalh/ScopeTrail/issues/new?template=pilot-result.yml');
+    lines.push('', '## Feedback', '', 'Trying ScopeTrail in advisory mode? Report false positives or missing config surfaces:', '', 'https://github.com/Conalh/ScopeTrail/issues/new/choose');
 }
 function renderText(report) {
     const lines = [`ScopeTrail permission drift: ${report.rating.toUpperCase()}`];

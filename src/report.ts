@@ -83,11 +83,11 @@ function renderMarkdown(report: DriftReport): string {
 function appendPilotFeedback(lines: string[]): void {
   lines.push(
     '',
-    '## Pilot feedback',
+    '## Feedback',
     '',
-    'Trying ScopeTrail in advisory mode? Report whether this run was useful, noisy, or missing an agent config surface:',
+    'Trying ScopeTrail in advisory mode? Report false positives or missing config surfaces:',
     '',
-    'https://github.com/Conalh/ScopeTrail/issues/new?template=pilot-result.yml'
+    'https://github.com/Conalh/ScopeTrail/issues/new/choose'
   );
 }
 
