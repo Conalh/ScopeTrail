@@ -20,7 +20,7 @@ ScopeTrail uploads nothing by default. It does not send repository contents, fin
 
 ## Runtime Dependencies
 
-The GitHub Action runs the committed `dist/` runtime from the ScopeTrail release tag. It does not run `npm ci` or `npm run build` in the installing repository, so pilot repositories do not need to download ScopeTrail development dependencies during their PR checks.
+The GitHub Action runs the committed `dist/` runtime from the ScopeTrail release tag, runs `npm ci --omit=dev` inside the ScopeTrail Action directory to install runtime dependencies, and does not run `npm run build` in the installing repository. Pilot repositories do not need to download ScopeTrail development dependencies during their PR checks.
 
 ## Required GitHub Permissions
 

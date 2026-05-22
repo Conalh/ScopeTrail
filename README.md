@@ -100,7 +100,7 @@ jobs:
 
 The action uploads nothing by default. It reads local git state from the checked-out repository, writes a Markdown report to the GitHub Actions step summary, and emits PR-visible warning annotations for each finding. Findings point at exact config lines when ScopeTrail can resolve them.
 
-The Action runs the committed `dist/` runtime from the release tag. It does not run `npm ci` or `npm run build` in your repository's workflow.
+The Action runs the committed `dist/` runtime from the release tag, runs `npm ci --omit=dev` inside the ScopeTrail Action directory to install runtime dependencies, and does not run `npm run build` in your repository's workflow.
 
 Start with `fail-on: none` so ScopeTrail is advisory while you tune policy. Raise it to `high` or `critical` once the findings are trusted.
 
