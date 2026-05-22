@@ -1,5 +1,6 @@
+import { readdir } from 'node:fs/promises';
 import { configPath, isRecord, lineOfJsonKey, lineOfJsonStringValue, readJsonObjectWithSource } from '../discovery.js';
-import type { Finding, McpServerConfig } from '../types.js';
+import type { Finding, McpServerConfig, Severity } from '../types.js';
 
 const MCP_CONFIGS = [
   { path: '.mcp.json', serverKeys: ['mcpServers'] },
@@ -7,6 +8,27 @@ const MCP_CONFIGS = [
   { path: '.vscode/mcp.json', serverKeys: ['servers', 'mcpServers'] },
   { path: '.codeium/windsurf/mcp_config.json', serverKeys: ['mcpServers'] }
 ] as const;
+
+const MCP_SAMPLE_CONFIG_FILENAMES = new Set([
+  '.mcp.json.sample',
+  '.mcp.json.disabled',
+  '.mcp.json.template',
+  '.mcp.json.example',
+  'mcp_config.json.sample',
+  'mcp_config.json.disabled',
+  'mcp_config.json.template',
+  'mcp_config.json.example'
+]);
+
+const IGNORED_SAMPLE_SCAN_DIRS = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  'coverage',
+  '.next',
+  '.turbo'
+]);
 
 // Exported so git-snapshot can materialize every surface this detector
 // reads. Keeping the source of truth in the detector prevents the
@@ -66,12 +88,70 @@ export async function detectMcpDrift(oldRoot: string, newRoot: string): Promise<
     }
   }
 
+  for (const path of await listMcpSampleConfigPaths(oldRoot, newRoot)) {
+    const config = { path, serverKeys: ['mcpServers', 'servers'] };
+    const oldServers = await readMcpServers(oldRoot, config);
+    const newServers = await readMcpServers(newRoot, config);
+
+    for (const [name, newServer] of Object.entries(newServers)) {
+      const oldServer = oldServers[name];
+      const changed = oldServer && serverCommand(newServer) !== serverCommand(oldServer);
+
+      if (!oldServer) {
+        findings.push({
+          kind: 'mcp_sample_server_added',
+          severity: 'low',
+          file: path,
+          line: newServer.line,
+          subject: name,
+          message: `Sample/disabled MCP server "${name}" was added.`,
+          recommendation: 'Confirm this sample config is intentionally shipped and safe for users to copy before merging.'
+        });
+      } else if (changed) {
+        findings.push({
+          kind: 'mcp_sample_server_command_changed',
+          severity: 'low',
+          file: path,
+          line: lineForServerCommand(newServer) ?? newServer.line,
+          subject: name,
+          message: `Sample/disabled MCP server "${name}" changed its launch command.`,
+          recommendation: 'Confirm this sample config change is intentional and safe for users to copy before merging.'
+        });
+      }
+
+      if ((!oldServer || changed) && isUnpinnedCommand(newServer)) {
+        findings.push({
+          kind: 'mcp_sample_unpinned_command',
+          severity: severityForSampleCommandRisk(newServer),
+          file: path,
+          line: lineForUnpinnedCommand(newServer) ?? newServer.line,
+          subject: name,
+          message: `Sample/disabled MCP server "${name}" uses an unpinned command: ${serverCommand(newServer)}.`,
+          recommendation: 'Pin sample MCP packages to an exact version so users do not copy a drifting install command.'
+        });
+      }
+
+      const endpoint = remoteEndpoint(newServer);
+      if ((!oldServer || changed) && endpoint) {
+        findings.push({
+          kind: 'mcp_sample_remote_endpoint',
+          severity: 'medium',
+          file: path,
+          line: lineForRemoteEndpoint(newServer) ?? newServer.line,
+          subject: name,
+          message: `Sample/disabled MCP server "${name}" points at remote endpoint: ${endpoint}.`,
+          recommendation: 'Confirm the endpoint is intended for copied sample configs and does not expose unexpected data or tools.'
+        });
+      }
+    }
+  }
+
   return findings;
 }
 
 async function readMcpServers(
   root: string,
-  config: { path: McpConfigPath; serverKeys: readonly string[] }
+  config: { path: McpConfigPath | string; serverKeys: readonly string[] }
 ): Promise<Record<string, McpServerModel>> {
   const source = await readJsonObjectWithSource(configPath(root, config.path));
   const json = source.json;
@@ -97,6 +177,53 @@ async function readMcpServers(
   }
 
   return servers;
+}
+
+export function isMcpSampleConfigPath(relativePath: string): boolean {
+  const normalized = normalizePath(relativePath);
+  const segments = normalized.split('/');
+  if (segments.some((segment) => IGNORED_SAMPLE_SCAN_DIRS.has(segment))) {
+    return false;
+  }
+
+  const fileName = segments.at(-1);
+  return fileName ? MCP_SAMPLE_CONFIG_FILENAMES.has(fileName) : false;
+}
+
+async function listMcpSampleConfigPaths(...roots: string[]): Promise<string[]> {
+  const paths = new Set<string>();
+  for (const root of roots) {
+    await collectMcpSampleConfigPaths(root, '', paths);
+  }
+
+  return [...paths].sort();
+}
+
+async function collectMcpSampleConfigPaths(root: string, relativeDir: string, paths: Set<string>): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(configPath(root, relativeDir), { withFileTypes: true });
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') {
+      return;
+    }
+
+    throw error;
+  }
+
+  for (const entry of entries) {
+    const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      if (!IGNORED_SAMPLE_SCAN_DIRS.has(entry.name)) {
+        await collectMcpSampleConfigPaths(root, relativePath, paths);
+      }
+      continue;
+    }
+
+    if (entry.isFile() && isMcpSampleConfigPath(relativePath)) {
+      paths.add(relativePath);
+    }
+  }
 }
 
 function readServerMap(json: Record<string, unknown>, serverKeys: readonly string[]): unknown {
@@ -136,6 +263,16 @@ function isUnpinnedCommand(server: McpServerModel): boolean {
   const packageLikeArgs = server.args ?? [];
   return ['npx', 'uvx', 'pipx'].includes((server.command ?? '').toLowerCase())
     && packageLikeArgs.some((arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
+}
+
+function severityForSampleCommandRisk(server: McpServerModel): Severity {
+  return isPipeToShellCommand(server) ? 'high' : 'medium';
+}
+
+function isPipeToShellCommand(server: McpServerModel): boolean {
+  const normalized = serverCommand(server).toLowerCase();
+  return /\bcurl\b.+\|\s*(bash|sh)\b/.test(normalized)
+    || /\b(iwr|invoke-webrequest)\b.+\|\s*(iex|invoke-expression)\b/.test(normalized);
 }
 
 function looksLikePackageName(value: string): boolean {
@@ -182,6 +319,27 @@ function lineForUnpinnedCommand(server: McpServerModel): number | undefined {
   return server.line;
 }
 
+function lineForRemoteEndpoint(server: McpServerModel): number | undefined {
+  return firstLineForValues(server, [server.url, server.serverUrl], isRemoteEndpoint);
+}
+
+function remoteEndpoint(server: McpServerModel): string | undefined {
+  return [server.url, server.serverUrl].find((value): value is string => Boolean(value && isRemoteEndpoint(value)));
+}
+
+function isRemoteEndpoint(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return false;
+    }
+
+    return !['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function firstLineForValues(
   server: McpServerModel,
   values: Array<string | undefined>,
@@ -202,4 +360,12 @@ function firstLineForValues(
 
 function getSourceText(server: McpServerModel): string {
   return server.sourceText ?? '';
+}
+
+function normalizePath(path: string): string {
+  return path.replaceAll('\\', '/');
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
 }

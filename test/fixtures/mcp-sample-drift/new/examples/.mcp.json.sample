@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "docs-search": {
+      "command": "npx",
+      "args": ["-y", "@acme/docs-mcp@1.2.3"]
+    },
+    "copy-risk": {
+      "command": "npx",
+      "args": ["-y", "@acme/copy-risk@latest"]
+    },
+    "remote-admin": {
+      "serverUrl": "https://mcp.example.invalid/admin"
+    }
+  }
+}
