@@ -24,14 +24,18 @@ test('GitHub Action metadata exposes PR drift inputs', async () => {
   assert.match(action, /--format github/);
 });
 
-test('GitHub Action uses committed runtime without installing dependencies in consumer workflows', async () => {
+test('GitHub Action uses committed dist and a deps-only install (no build) in consumer workflows', async () => {
   const action = await readFile(join(packageRoot, 'action.yml'), 'utf8');
   const gitignore = await readFile(join(packageRoot, '.gitignore'), 'utf8');
 
   assert.match(action, /node "\$GITHUB_ACTION_PATH\/dist\/index\.js" diff --repo/);
-  assert.doesNotMatch(action, /npm ci/);
+  // dist/ is committed so consumers don't run a TypeScript build at action time.
   assert.doesNotMatch(action, /npm run build/);
+  assert.doesNotMatch(action, /tsc /);
   assert.doesNotMatch(gitignore, /^dist\/$/m);
+  // After the agent-gov-core migration the action installs runtime deps only
+  // (--omit=dev) so the external import resolves without a build step.
+  assert.match(action, /npm ci .*--omit=dev/);
 });
 
 test('public Action install tags match package version', async () => {
