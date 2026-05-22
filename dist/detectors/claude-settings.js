@@ -42,18 +42,22 @@ export async function detectClaudeSettingsDrift(oldRoot, newRoot) {
             });
             continue;
         }
-        // Swapping a strict guard for a no-op script is just as material as
-        // removing the hook outright — and the previous detector missed it.
+        // Any drift in the command set is material — swapping a strict
+        // guard for a no-op, dropping one guard out of a multi-guard hook,
+        // or appending a no-op alongside the strict guard. The previous
+        // check required `newCommands.size === oldCommands.size`, which
+        // missed adds and drops that changed the count.
         const newCommands = newSettings.hookCommands.get(hookName) ?? new Set();
-        const changed = [...newCommands].filter((command) => !oldCommands.has(command));
-        if (changed.length > 0 && newCommands.size === oldCommands.size) {
+        const added = [...newCommands].filter((command) => !oldCommands.has(command));
+        const removed = [...oldCommands].filter((command) => !newCommands.has(command));
+        if (added.length > 0 || removed.length > 0) {
             findings.push({
                 kind: 'scope_trail.hook_command_changed',
                 severity: isHighImpactHook(hookName) ? 'high' : 'medium',
                 file: CLAUDE_SETTINGS_FILE,
                 subject: hookName,
-                message: `Claude hook "${hookName}" command(s) changed: ${changed.join(', ')}.`,
-                recommendation: 'Review the new command — a weakened guard (e.g., a no-op script) is the same risk as a removed hook.'
+                message: hookCommandChangeMessage(hookName, added, removed),
+                recommendation: 'Review the change — a removed guard, a no-op appended next to a strict one, or any rewrite of a hook command can all weaken policy.'
             });
         }
     }
@@ -207,4 +211,14 @@ function severityForRemovedDeny(permission) {
 }
 function isHighImpactHook(hookName) {
     return ['pretooluse', 'posttooluse', 'permissionrequest', 'sessionend'].includes(hookName.toLowerCase());
+}
+function hookCommandChangeMessage(hookName, added, removed) {
+    const parts = [];
+    if (added.length > 0) {
+        parts.push(`added: ${added.join(', ')}`);
+    }
+    if (removed.length > 0) {
+        parts.push(`removed: ${removed.join(', ')}`);
+    }
+    return `Claude hook "${hookName}" command(s) changed (${parts.join('; ')}).`;
 }
