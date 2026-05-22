@@ -1,6 +1,6 @@
 # Pilot Guide
 
-Use this guide to try ScopeTrail in an external repository before any paid team-layer work exists.
+Use this guide to try ScopeTrail in an external repository and share feedback on how the Action behaves on real config.
 
 ## Install
 
@@ -46,11 +46,7 @@ Report pilot results in the active pilot issue:
 
 https://github.com/Conalh/ScopeTrail/issues/18
 
-Or open a structured pilot result:
-
-https://github.com/Conalh/ScopeTrail/issues/new?template=pilot-result.yml
-
-Use this format:
+Or open a new issue with this format:
 
 ```md
 Pilot source: external repo / team / solo repo
@@ -74,4 +70,4 @@ Being listed in the outreach queue does not count as validation evidence. A repo
 
 ## Boundary
 
-ScopeTrail is a free local-only CLI and GitHub Action today. The paid team layer remains unbuilt until external pilot evidence shows repeated team-level pain that the single-repo Action cannot manage well.
+ScopeTrail is a free local-only CLI and GitHub Action. It reads the checked-out repository, uploads nothing by default, and starts advisory with `fail-on: none`.

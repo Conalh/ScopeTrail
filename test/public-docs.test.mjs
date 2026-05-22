@@ -11,12 +11,12 @@ async function readProjectFile(...parts) {
   return readFile(join(packageRoot, ...parts), 'utf8');
 }
 
-test('README links trust, adoption, and team validation docs from the public Action surface', async () => {
+test('README links trust, adoption, and pilot docs from the public Action surface', async () => {
   const readme = await readProjectFile('README.md');
 
   assert.match(readme, /\[Trust and permissions\]\(docs\/TRUST\.md\)/);
   assert.match(readme, /\[Adoption checklist\]\(docs\/ADOPTION\.md\)/);
-  assert.match(readme, /\[Team-layer validation\]\(docs\/TEAM_VALIDATION\.md\)/);
+  assert.match(readme, /\[Pilot guide\]\(docs\/PILOT\.md\)/);
   assert.match(readme, /install with `fail-on: none`/i);
   assert.match(readme, /runs the committed `dist\/` runtime/i);
   assert.match(readme, /runs `npm ci --omit=dev` inside the ScopeTrail Action directory/i);
@@ -65,29 +65,6 @@ test('adoption checklist defines advisory-first rollout and feedback path', asyn
   assert.match(adoption, /raise `fail-on`/i);
 });
 
-test('team validation doc keeps SaaS deferred behind evidence gates', async () => {
-  const validation = await readProjectFile('docs', 'TEAM_VALIDATION.md');
-
-  assert.match(validation, /paid team layer is a hypothesis/i);
-  assert.match(validation, /Do not build hosted SaaS/i);
-  assert.match(validation, /At least 3 external repositories/i);
-  assert.match(validation, /At least 2 independent users/i);
-  assert.match(validation, /At least 2 independent feedback items/i);
-  assert.match(validation, /cross-repo visibility/i);
-  assert.match(validation, /exception workflow/i);
-});
-
-test('public docs link the pilot issue as the active validation funnel', async () => {
-  const readme = await readProjectFile('README.md');
-  const validation = await readProjectFile('docs', 'TEAM_VALIDATION.md');
-  const pilotIssueUrl = 'https://github.com/Conalh/ScopeTrail/issues/18';
-
-  assert.match(readme, /Pilot ScopeTrail/i);
-  assert.match(readme, new RegExp(pilotIssueUrl.replaceAll('/', '\\/')));
-  assert.match(validation, /active pilot issue/i);
-  assert.match(validation, new RegExp(pilotIssueUrl.replaceAll('/', '\\/')));
-});
-
 test('pilot guide gives external maintainers a complete advisory trial path', async () => {
   const readme = await readProjectFile('README.md');
   const adoption = await readProjectFile('docs', 'ADOPTION.md');
@@ -101,9 +78,5 @@ test('pilot guide gives external maintainers a complete advisory trial path', as
   assert.match(pilot, /fail-on:\s*none/);
   assert.match(pilot, /3-5 pull requests/i);
   assert.match(pilot, /https:\/\/github\.com\/Conalh\/ScopeTrail\/issues\/18/);
-  assert.match(pilot, /https:\/\/github\.com\/Conalh\/ScopeTrail\/issues\/21/);
-  assert.match(pilot, /issues\/new\?template=pilot-result\.yml/);
-  assert.match(pilot, /does not count as validation evidence/i);
   assert.match(pilot, /cross-repo visibility/i);
-  assert.match(readme, /pilot-result\.yml/);
 });

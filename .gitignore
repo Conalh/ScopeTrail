@@ -1,1 +1,4 @@
 node_modules/
+
+# Local codex working state — not for tracking
+.codex/
