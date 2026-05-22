@@ -46,6 +46,73 @@ test('mcp_sample_remote_endpoint: http:// fires high severity, https:// stays me
   }
 });
 
+test('lineForUnpinnedCommand pinpoints package line for bunx + npm exec / yarn dlx / pnpm dlx', async () => {
+  // Pre-fix gap: `lineForUnpinnedCommand` only mapped npx/uvx/pipx,
+  // so bunx findings (and the wrapper-runners npm/yarn/pnpm with
+  // exec/dlx subcommands) fell back to the server-declaration line
+  // instead of pointing at the package the reviewer needs to see.
+  //
+  // For wrappers we also have to skip args[0] (the subcommand) —
+  // `exec` and `dlx` both pass `looksLikePackageName`, so a naive
+  // scan would mis-locate to the subcommand line.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-line-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(newDir, { recursive: true });
+    writeFileSync(join(oldDir, '.mcp.json'), JSON.stringify({ mcpServers: {} }));
+    // Hand-written JSON so we know exact line numbers — package
+    // string for each server is on its own line.
+    const content = [
+      '{',
+      '  "mcpServers": {',
+      '    "bun-server": {',
+      '      "command": "bunx",',
+      '      "args": [',
+      '        "@vendor/bun-pkg"',
+      '      ]',
+      '    },',
+      '    "npm-server": {',
+      '      "command": "npm",',
+      '      "args": [',
+      '        "exec",',
+      '        "@vendor/npm-pkg"',
+      '      ]',
+      '    },',
+      '    "yarn-server": {',
+      '      "command": "yarn",',
+      '      "args": [',
+      '        "dlx",',
+      '        "@vendor/yarn-pkg"',
+      '      ]',
+      '    }',
+      '  }',
+      '}',
+      ''
+    ].join('\n');
+    writeFileSync(join(newDir, '.mcp.json'), content);
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    const unpinned = findings.filter((f) => f.kind === 'scope_trail.unpinned_mcp_command');
+    const bySubject = Object.fromEntries(unpinned.map((f) => [f.subject, f]));
+
+    assert.ok(bySubject['bun-server'], 'expected unpinned finding for bunx');
+    assert.equal(bySubject['bun-server'].line, 6, 'bunx package is on line 6');
+
+    assert.ok(bySubject['npm-server'], 'expected unpinned finding for npm exec');
+    assert.equal(bySubject['npm-server'].line, 13, 'npm exec package is on line 13 (skips exec subcommand on line 12)');
+
+    assert.ok(bySubject['yarn-server'], 'expected unpinned finding for yarn dlx');
+    assert.equal(bySubject['yarn-server'].line, 20, 'yarn dlx package is on line 20 (skips dlx subcommand on line 19)');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('isUnpinnedCommand flags bunx packages without exact versions', async () => {
   // bunx is the Bun equivalent of npx and ships as a standalone
   // binary, so MCP configs use `"command": "bunx"` directly. Prior
