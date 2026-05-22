@@ -1,0 +1,6 @@
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[mcp_servers.pinned-helper]
+command = "npx"
+args = ["-y", "@vendor/helper-mcp@1.2.3"]

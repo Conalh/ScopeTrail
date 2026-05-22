@@ -49,18 +49,22 @@ export async function detectClaudeSettingsDrift(oldRoot: string, newRoot: string
       continue;
     }
 
-    // Swapping a strict guard for a no-op script is just as material as
-    // removing the hook outright — and the previous detector missed it.
+    // Any drift in the command set is material — swapping a strict
+    // guard for a no-op, dropping one guard out of a multi-guard hook,
+    // or appending a no-op alongside the strict guard. The previous
+    // check required `newCommands.size === oldCommands.size`, which
+    // missed adds and drops that changed the count.
     const newCommands = newSettings.hookCommands.get(hookName) ?? new Set<string>();
-    const changed = [...newCommands].filter((command) => !oldCommands.has(command));
-    if (changed.length > 0 && newCommands.size === oldCommands.size) {
+    const added = [...newCommands].filter((command) => !oldCommands.has(command));
+    const removed = [...oldCommands].filter((command) => !newCommands.has(command));
+    if (added.length > 0 || removed.length > 0) {
       findings.push({
         kind: 'scope_trail.hook_command_changed',
         severity: isHighImpactHook(hookName) ? 'high' : 'medium',
         file: CLAUDE_SETTINGS_FILE,
         subject: hookName,
-        message: `Claude hook "${hookName}" command(s) changed: ${changed.join(', ')}.`,
-        recommendation: 'Review the new command — a weakened guard (e.g., a no-op script) is the same risk as a removed hook.'
+        message: hookCommandChangeMessage(hookName, added, removed),
+        recommendation: 'Review the change — a removed guard, a no-op appended next to a strict one, or any rewrite of a hook command can all weaken policy.'
       });
     }
   }
@@ -169,13 +173,21 @@ function hookHasEntries(value: unknown): boolean {
 export function isBroadAllow(permission: string): boolean {
   const normalized = permission.toLowerCase();
 
-  if (/\bbash\([^)]*\*[^)]*\)/.test(normalized)) {
+  // Bare verb (no parentheses) or wildcard-scoped verb for any of the
+  // dangerous operations. This catches `"Bash"`, `"Read"`, `"Write"`,
+  // `"Edit"`, `"WebFetch"`, etc. — bare tokens that grant unlimited
+  // access. Previously only WebFetch/WebSearch/Task went through this
+  // check, which silently let `"Bash"` and bare `"Read"`/`"Write"`/
+  // `"Edit"` slip past unflagged.
+  if (isBroadVerbGrant(normalized, ['bash', 'read', 'write', 'edit', 'webfetch', 'websearch', 'task'])) {
     return true;
   }
+  // Scoped grants whose target is a rooted path (absolute, home-rel,
+  // or Windows drive). `Read(/etc/passwd)` doesn't include `*` but is
+  // still broader than a workspace-relative path. Stays separate from
+  // the verb-grant check because that path-shape rule only applies to
+  // file-access verbs, not network/task verbs.
   if (/\b(read|write|edit)\((~|[a-z]:\\|\/|\*\*)/.test(normalized)) {
-    return true;
-  }
-  if (isBroadVerbGrant(normalized, ['webfetch', 'websearch', 'task'])) {
     return true;
   }
   if (isBroadMcpGrant(normalized)) {
@@ -246,4 +258,15 @@ function severityForRemovedDeny(permission: string): Severity {
 
 function isHighImpactHook(hookName: string): boolean {
   return ['pretooluse', 'posttooluse', 'permissionrequest', 'sessionend'].includes(hookName.toLowerCase());
+}
+
+function hookCommandChangeMessage(hookName: string, added: string[], removed: string[]): string {
+  const parts: string[] = [];
+  if (added.length > 0) {
+    parts.push(`added: ${added.join(', ')}`);
+  }
+  if (removed.length > 0) {
+    parts.push(`removed: ${removed.join(', ')}`);
+  }
+  return `Claude hook "${hookName}" command(s) changed (${parts.join('; ')}).`;
 }

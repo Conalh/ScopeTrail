@@ -1,5 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { configPath, isRecord, lineOfJsonKey, lineOfJsonStringValue, readJsonObjectWithSource } from '../discovery.js';
+import { isPipeToShellCommand, isUnpinnedCommand, serverCommand } from '../mcp-risk.js';
 import type { Finding, McpServerConfig, Severity } from '../types.js';
 
 const MCP_CONFIGS = [
@@ -153,14 +154,24 @@ export async function detectMcpDrift(oldRoot: string, newRoot: string): Promise<
 
       const endpoint = remoteEndpoint(newServer);
       if ((!oldServer || changed) && endpoint) {
+        const unencrypted = isUnencryptedEndpoint(endpoint);
         findings.push({
           kind: 'scope_trail.mcp_sample_remote_endpoint',
-          severity: 'medium',
+          // An `http://` endpoint in a sample config is worse than an
+          // `https://` one: anyone who copies the sample inherits a
+          // MitM-vulnerable connection. Bump to high; https stays at
+          // medium because the copy-and-paste risk is "is this the
+          // right endpoint?" not "is this transport safe?".
+          severity: unencrypted ? 'high' : 'medium',
           file: path,
           line: lineForRemoteEndpoint(newServer) ?? newServer.line,
           subject: name,
-          message: `Sample/disabled MCP server "${name}" points at remote endpoint: ${endpoint}.`,
-          recommendation: 'Confirm the endpoint is intended for copied sample configs and does not expose unexpected data or tools.'
+          message: unencrypted
+            ? `Sample/disabled MCP server "${name}" points at an unencrypted remote endpoint: ${endpoint}.`
+            : `Sample/disabled MCP server "${name}" points at remote endpoint: ${endpoint}.`,
+          recommendation: unencrypted
+            ? 'Use https:// for sample remote MCP endpoints — copy-pasted samples should not silently downgrade users to unencrypted transport.'
+            : 'Confirm the endpoint is intended for copied sample configs and does not expose unexpected data or tools.'
         });
       }
     }
@@ -251,19 +262,25 @@ async function collectMcpSampleConfigPaths(root: string, relativeDir: string, pa
     throw error;
   }
 
-  for (const entry of entries) {
-    const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) {
-      if (!IGNORED_SAMPLE_SCAN_DIRS.has(entry.name)) {
-        await collectMcpSampleConfigPaths(root, relativePath, paths);
+  // Walk subdirectories in parallel. Each `readdir` is independent
+  // and `paths` is a Set mutated from the same event loop, so add
+  // operations are race-free in single-threaded Node. The caller
+  // already sorts the result, so insertion order doesn't matter.
+  await Promise.all(
+    entries.map(async (entry) => {
+      const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (!IGNORED_SAMPLE_SCAN_DIRS.has(entry.name)) {
+          await collectMcpSampleConfigPaths(root, relativePath, paths);
+        }
+        return;
       }
-      continue;
-    }
 
-    if (entry.isFile() && isMcpSampleConfigPath(relativePath)) {
-      paths.add(relativePath);
-    }
-  }
+      if (entry.isFile() && isMcpSampleConfigPath(relativePath)) {
+        paths.add(relativePath);
+      }
+    })
+  );
 }
 
 function readServerMap(json: Record<string, unknown>, serverKeys: readonly string[]): unknown {
@@ -276,43 +293,8 @@ function readServerMap(json: Record<string, unknown>, serverKeys: readonly strin
   return undefined;
 }
 
-function serverCommand(server: McpServerModel): string {
-  return [server.command, ...(server.args ?? []), server.url, server.serverUrl].filter(Boolean).join(' ');
-}
-
-function isUnpinnedCommand(server: McpServerModel): boolean {
-  const command = serverCommand(server);
-  const normalized = command.toLowerCase();
-
-  if (normalized.includes('@latest')) {
-    return true;
-  }
-
-  if (/https:\/\/github\.com\/[^ ]+/.test(normalized)) {
-    return true;
-  }
-
-  if (/\bcurl\b.+\|\s*(bash|sh)\b/.test(normalized)) {
-    return true;
-  }
-
-  if (/\b(iwr|invoke-webrequest)\b.+\|\s*(iex|invoke-expression)\b/.test(normalized)) {
-    return true;
-  }
-
-  const packageLikeArgs = server.args ?? [];
-  return ['npx', 'uvx', 'pipx'].includes((server.command ?? '').toLowerCase())
-    && packageLikeArgs.some((arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
-}
-
 function severityForSampleCommandRisk(server: McpServerModel): Severity {
   return isPipeToShellCommand(server) ? 'high' : 'medium';
-}
-
-function isPipeToShellCommand(server: McpServerModel): boolean {
-  const normalized = serverCommand(server).toLowerCase();
-  return /\bcurl\b.+\|\s*(bash|sh)\b/.test(normalized)
-    || /\b(iwr|invoke-webrequest)\b.+\|\s*(iex|invoke-expression)\b/.test(normalized);
 }
 
 function looksLikePackageName(value: string): boolean {
@@ -375,6 +357,14 @@ function isRemoteEndpoint(value: string): boolean {
     }
 
     return !['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isUnencryptedEndpoint(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'http:';
   } catch {
     return false;
   }

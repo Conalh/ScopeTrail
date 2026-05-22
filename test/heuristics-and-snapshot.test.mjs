@@ -57,6 +57,25 @@ test('isBroadAllow: bare tokens and wildcard scopes ARE broad', () => {
   assert.equal(isBroadAllow('mcp__*'), true);
 });
 
+test('isBroadAllow: bare Bash/Read/Write/Edit ARE broad (regression for security gap)', () => {
+  // Pre-fix gap: bare `"Bash"` grants unlimited shell execution but
+  // the regex required a parenthesized scope, so it silently slipped
+  // through. Same for `"Read"`/`"Write"`/`"Edit"`. The asymmetry —
+  // bare WebFetch was flagged while bare Bash wasn't — was the tell.
+  assert.equal(isBroadAllow('Bash'), true);
+  assert.equal(isBroadAllow('Read'), true);
+  assert.equal(isBroadAllow('Write'), true);
+  assert.equal(isBroadAllow('Edit'), true);
+});
+
+test('isBroadAllow: narrowly-scoped Bash/Read/Write/Edit stay narrow', () => {
+  // The bare-verb fix must not over-fire on legitimate narrow scopes.
+  assert.equal(isBroadAllow('Bash(npm test)'), false);
+  assert.equal(isBroadAllow('Bash(git status)'), false);
+  assert.equal(isBroadAllow('Read(./src/foo.txt)'), false);
+  assert.equal(isBroadAllow('Edit(./README.md)'), false);
+});
+
 test('Claude detector: hook_added fires when a new hook is introduced', async () => {
   const dir = await makeClaudeFixture(
     { permissions: { allow: [], deny: [] }, hooks: {} },
@@ -92,6 +111,102 @@ test('Claude detector: hook_command_changed fires when an existing hook is weake
     assert.ok(changed);
     assert.equal(changed.subject, 'PreToolUse');
     assert.equal(changed.severity, 'high'); // PreToolUse is high-impact
+  } finally {
+    await rm(dir.root, { recursive: true, force: true });
+  }
+});
+
+test('Claude detector: hook_command_changed fires when a no-op is appended alongside a strict guard', async () => {
+  // Pre-fix gap: when the hook gained an extra command, newCommands.size
+  // > oldCommands.size and the previous `size ===` guard skipped the
+  // finding. A reviewer could slip a relaxed script in next to a strict
+  // one and ScopeTrail stayed silent.
+  const dir = await makeClaudeFixture(
+    {
+      permissions: { allow: [], deny: [] },
+      hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: '/strict-guard.sh' }] }] }
+    },
+    {
+      permissions: { allow: [], deny: [] },
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: 'Bash',
+            hooks: [
+              { type: 'command', command: '/strict-guard.sh' },
+              { type: 'command', command: '/noop.sh' }
+            ]
+          }
+        ]
+      }
+    }
+  );
+  try {
+    const findings = await detectClaudeSettingsDrift(dir.oldRoot, dir.newRoot);
+    const changed = findings.find((f) => f.kind === 'scope_trail.hook_command_changed');
+    assert.ok(changed, 'expected hook_command_changed when a no-op is appended');
+    assert.equal(changed.subject, 'PreToolUse');
+    assert.equal(changed.severity, 'high');
+    assert.match(changed.message, /added: \/noop\.sh/);
+  } finally {
+    await rm(dir.root, { recursive: true, force: true });
+  }
+});
+
+test('Claude detector: hook_command_changed fires when one guard is removed from a multi-guard hook', async () => {
+  // Pre-fix gap: when the hook lost a command but the hook name was
+  // still present, newCommands.size < oldCommands.size and the
+  // `size ===` guard skipped it. Dropping one guard out of two is
+  // exactly the weakening case ScopeTrail should catch.
+  const dir = await makeClaudeFixture(
+    {
+      permissions: { allow: [], deny: [] },
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: 'Bash',
+            hooks: [
+              { type: 'command', command: '/strict-guard.sh' },
+              { type: 'command', command: '/audit-log.sh' }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      permissions: { allow: [], deny: [] },
+      hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: '/audit-log.sh' }] }] }
+    }
+  );
+  try {
+    const findings = await detectClaudeSettingsDrift(dir.oldRoot, dir.newRoot);
+    const changed = findings.find((f) => f.kind === 'scope_trail.hook_command_changed');
+    assert.ok(changed, 'expected hook_command_changed when one of multiple guards is removed');
+    assert.equal(changed.subject, 'PreToolUse');
+    assert.equal(changed.severity, 'high');
+    assert.match(changed.message, /removed: \/strict-guard\.sh/);
+  } finally {
+    await rm(dir.root, { recursive: true, force: true });
+  }
+});
+
+test('Claude detector: hook with unchanged command set produces no hook_command_changed finding', async () => {
+  // Regression guard for the symmetric-difference logic — same set of
+  // commands in a different order or wrapped under a different matcher
+  // should not generate noise.
+  const dir = await makeClaudeFixture(
+    {
+      permissions: { allow: [], deny: [] },
+      hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: '/guard.sh' }] }] }
+    },
+    {
+      permissions: { allow: [], deny: [] },
+      hooks: { PreToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: '/guard.sh' }] }] }
+    }
+  );
+  try {
+    const findings = await detectClaudeSettingsDrift(dir.oldRoot, dir.newRoot);
+    assert.equal(findings.find((f) => f.kind === 'scope_trail.hook_command_changed'), undefined);
   } finally {
     await rm(dir.root, { recursive: true, force: true });
   }

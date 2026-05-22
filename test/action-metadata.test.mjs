@@ -20,15 +20,34 @@ test('GitHub Action metadata exposes PR drift inputs', async () => {
   assert.match(action, /^  fail-on:/m);
   assert.match(action, /^  finding-count:/m);
   assert.match(action, /GITHUB_STEP_SUMMARY/);
-  assert.match(action, /diff --repo/);
+  assert.match(action, /diff [\\\s]*--repo/);
   assert.match(action, /--format github/);
+  assert.match(action, /--out-markdown/);
+  assert.match(action, /--out-json/);
+});
+
+test('GitHub Action invokes the ScopeTrail CLI once per run', async () => {
+  // Before this change the action invoked `node $GITHUB_ACTION_PATH/dist/index.js`
+  // three separate times (markdown / json / github) and each call
+  // re-materialized both git snapshots and re-ran every detector. The
+  // single-scan refactor renders all three outputs from one run.
+  const action = await readFile(join(packageRoot, 'action.yml'), 'utf8');
+  const invocations = action.match(/node "\$GITHUB_ACTION_PATH\/dist\/index\.js"/g) ?? [];
+  assert.equal(
+    invocations.length,
+    1,
+    `expected exactly one CLI invocation in action.yml, found ${invocations.length}`
+  );
 });
 
 test('GitHub Action uses committed dist and a deps-only install (no build) in consumer workflows', async () => {
   const action = await readFile(join(packageRoot, 'action.yml'), 'utf8');
   const gitignore = await readFile(join(packageRoot, '.gitignore'), 'utf8');
 
-  assert.match(action, /node "\$GITHUB_ACTION_PATH\/dist\/index\.js" diff --repo/);
+  // Tolerant of line continuations (`\`) between `diff` and `--repo`
+  // so the single-scan refactor can split the invocation across
+  // lines for readability.
+  assert.match(action, /node "\$GITHUB_ACTION_PATH\/dist\/index\.js" diff[\\\s]+--repo/);
   // dist/ is committed so consumers don't run a TypeScript build at action time.
   assert.doesNotMatch(action, /npm run build/);
   assert.doesNotMatch(action, /tsc /);

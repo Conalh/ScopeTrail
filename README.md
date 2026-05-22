@@ -129,6 +129,7 @@ ScopeTrail v0 detects:
 - Removed Claude Code deny rules for sensitive files such as `.env`.
 - Claude Code hook changes: **removed**, **added**, and **command-changed** (a strict `PreToolUse` swapped for a no-op script is the same risk as a removal — both are now caught).
 - Codex config drift such as full-access/elevated sandboxes, weakened approval policy, enabled network access, or trusted project settings.
+- Codex `[mcp_servers.NAME]` additions, launch-command changes, and unpinned commands (the same risk model as `.mcp.json` MCP detection, applied to TOML).
 
 The git-mode snapshot list is derived from the detectors themselves, so adding a new surface in one place can never leave the GitHub Action silently blind to it. A regression test fails the build if a detector's target paths aren't covered.
 

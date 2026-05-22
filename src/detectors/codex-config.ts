@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
+import { lineOfTomlKey, parseToml } from 'agent-gov-core';
 import { configPath } from '../discovery.js';
+import { isUnpinnedCommand, serverCommand, type McpCommandShape } from '../mcp-risk.js';
 import type { Finding } from '../types.js';
 
 export const CODEX_CONFIG_FILE = '.codex/config.toml';
@@ -8,6 +10,11 @@ export const CODEX_TARGET_PATHS: readonly string[] = [CODEX_CONFIG_FILE];
 interface TomlEntry {
   line: number;
   value: string;
+}
+
+interface CodexMcpServer extends McpCommandShape {
+  text: string;
+  name: string;
 }
 
 export async function detectCodexConfigDrift(oldRoot: string, newRoot: string): Promise<Finding[]> {
@@ -75,7 +82,124 @@ export async function detectCodexConfigDrift(oldRoot: string, newRoot: string): 
     });
   }
 
+  for (const finding of await detectCodexMcpDrift(oldRoot, newRoot)) {
+    findings.push(finding);
+  }
+
   return findings;
+}
+
+// Codex `.codex/config.toml` carries the same `[mcp_servers.NAME]`
+// shape that ScopeTrail already flags in `.mcp.json` — without this
+// detector, a Codex user can add `[mcp_servers.stripe-admin]` with
+// `args = ["-y", "@vendor/stripe-mcp@latest"]` and the unpinned MCP
+// risk model never sees it.
+async function detectCodexMcpDrift(oldRoot: string, newRoot: string): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  const oldServers = await readCodexMcpServers(oldRoot);
+  const newServers = await readCodexMcpServers(newRoot);
+
+  for (const [name, newServer] of newServers) {
+    const oldServer = oldServers.get(name);
+    const commandChanged = oldServer && serverCommand(newServer) !== serverCommand(oldServer);
+
+    if (!oldServer) {
+      findings.push({
+        kind: 'scope_trail.codex_mcp_server_added',
+        severity: 'high',
+        file: CODEX_CONFIG_FILE,
+        line: lineForServer(newServer),
+        subject: name,
+        message: `Codex MCP server "${name}" was added.`,
+        recommendation: 'Review the server package, pin its version, and confirm the tools it exposes before merging.'
+      });
+    } else if (commandChanged) {
+      findings.push({
+        kind: 'scope_trail.codex_mcp_server_command_changed',
+        severity: 'medium',
+        file: CODEX_CONFIG_FILE,
+        line: lineForServer(newServer),
+        subject: name,
+        message: `Codex MCP server "${name}" changed its launch command.`,
+        recommendation: 'Confirm the command change is intentional and still points at a trusted, pinned package.'
+      });
+    }
+
+    if ((!oldServer || commandChanged) && isUnpinnedCommand(newServer)) {
+      findings.push({
+        kind: 'scope_trail.codex_unpinned_mcp_command',
+        severity: 'high',
+        file: CODEX_CONFIG_FILE,
+        line: lineForServer(newServer),
+        subject: name,
+        message: `Codex MCP server "${name}" uses an unpinned command: ${serverCommand(newServer)}.`,
+        recommendation: 'Pin executable packages to an exact version and avoid pipe-to-shell installation commands.'
+      });
+    }
+  }
+
+  return findings;
+}
+
+async function readCodexMcpServers(root: string): Promise<Map<string, CodexMcpServer>> {
+  const path = configPath(root, CODEX_CONFIG_FILE);
+  let text = '';
+  try {
+    text = await readFile(path, 'utf8');
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') {
+      return new Map();
+    }
+    throw error;
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = parseToml(text);
+  } catch {
+    return new Map();
+  }
+
+  const rawServers = parsed.mcp_servers;
+  if (!isPlainObject(rawServers)) {
+    return new Map();
+  }
+
+  const servers = new Map<string, CodexMcpServer>();
+  for (const [name, entry] of Object.entries(rawServers)) {
+    if (!isPlainObject(entry)) {
+      continue;
+    }
+
+    servers.set(name, {
+      name,
+      text,
+      command: typeof entry.command === 'string' ? entry.command : undefined,
+      args: Array.isArray(entry.args)
+        ? entry.args.filter((arg): arg is string => typeof arg === 'string')
+        : undefined,
+      url: typeof entry.url === 'string' ? entry.url : undefined
+    });
+  }
+
+  return servers;
+}
+
+function lineForServer(server: CodexMcpServer): number | undefined {
+  // Point at the leaf the reviewer most needs to see — `command`
+  // first, then any of the args/url keys. Fall back to file-level
+  // when nothing matches so the finding still surfaces.
+  for (const leaf of ['command', 'args', 'url']) {
+    const line = lineOfTomlKey(server.text, `mcp_servers.${server.name}.${leaf}`);
+    if (line) {
+      return line;
+    }
+  }
+  return undefined;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function readCodexConfig(root: string): Promise<Map<string, TomlEntry>> {

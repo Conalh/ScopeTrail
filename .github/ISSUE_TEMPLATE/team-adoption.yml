@@ -1,0 +1,48 @@
+name: Team adoption signal
+description: Share rollout pain when ScopeTrail's gap is about ownership, reporting, exceptions, or many repositories.
+title: "[team adoption]: "
+labels: ["adoption", "team-signal"]
+body:
+  - type: textarea
+    id: pain
+    attributes:
+      label: Rollout pain
+      description: Describe the team-level gap. ScopeTrail is intentionally small at v0, so signal beats prescription here.
+    validations:
+      required: true
+  - type: dropdown
+    id: theme
+    attributes:
+      label: Primary theme
+      description: Which adoption gap does this fall under?
+      options:
+        - Ownership (who triages findings?)
+        - Reporting (rollup across repos / over time)
+        - Exceptions (allowlists, suppressions, justified drift)
+        - Many repositories (scale of rollout)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Affected scope
+      description: Help prioritize whether this matters for one repo or repeated team workflows.
+      options:
+        - One repository
+        - Multiple repositories
+        - Organization-wide pattern
+        - Not sure yet
+    validations:
+      required: true
+  - type: input
+    id: repository-count
+    attributes:
+      label: Approximate repository count
+      description: Optional estimate if this affects more than one repository.
+      placeholder: "Example: 1, 5, 20+"
+  - type: textarea
+    id: current-workaround
+    attributes:
+      label: Current workaround
+      description: How is the team handling this today? (Manual review, spreadsheet, a different tool, nothing yet, etc.)
