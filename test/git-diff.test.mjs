@@ -77,12 +77,12 @@ test('CLI diffs permission drift between git refs', async () => {
     assert.deepEqual(
       report.findings.map((finding) => finding.kind),
       [
-        'mcp_server_added',
-        'unpinned_mcp_command',
-        'permission_allow_widened',
-        'permission_allow_widened',
-        'permission_deny_removed',
-        'hook_removed'
+        'scope_trail.mcp_server_added',
+        'scope_trail.unpinned_mcp_command',
+        'scope_trail.permission_allow_widened',
+        'scope_trail.permission_allow_widened',
+        'scope_trail.permission_deny_removed',
+        'scope_trail.hook_removed'
       ]
     );
   } finally {
@@ -131,10 +131,10 @@ test('CLI git diff snapshots sample MCP config paths', async () => {
 
     assert.deepEqual(
       report.findings.map((finding) => finding.kind),
-      ['mcp_sample_server_added', 'mcp_sample_unpinned_command']
+      ['scope_trail.mcp_sample_server_added', 'scope_trail.mcp_sample_unpinned_command']
     );
     assert.equal(report.findings[0].file, 'examples/.mcp.json.sample');
-    assert.equal(report.findings.some((finding) => finding.kind === 'mcp_server_added'), false);
+    assert.equal(report.findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
   } finally {
     await rm(repo, { recursive: true, force: true });
   }
@@ -181,10 +181,10 @@ test('CLI git diff snapshots platform-suffixed MCP example paths', async () => {
 
     assert.deepEqual(
       report.findings.map((finding) => finding.kind),
-      ['mcp_sample_server_added', 'mcp_sample_unpinned_command']
+      ['scope_trail.mcp_sample_server_added', 'scope_trail.mcp_sample_unpinned_command']
     );
     assert.equal(report.findings[0].file, 'examples/.mcp.json.windows.example');
-    assert.equal(report.findings.some((finding) => finding.kind === 'mcp_server_added'), false);
+    assert.equal(report.findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
   } finally {
     await rm(repo, { recursive: true, force: true });
   }
@@ -231,10 +231,10 @@ test('CLI git diff snapshots prefixed MCP config example paths', async () => {
 
     assert.deepEqual(
       report.findings.map((finding) => finding.kind),
-      ['mcp_sample_server_added', 'mcp_sample_unpinned_command']
+      ['scope_trail.mcp_sample_server_added', 'scope_trail.mcp_sample_unpinned_command']
     );
     assert.equal(report.findings[0].file, 'examples/example_mcp_config.json');
-    assert.equal(report.findings.some((finding) => finding.kind === 'mcp_server_added'), false);
+    assert.equal(report.findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
   } finally {
     await rm(repo, { recursive: true, force: true });
   }

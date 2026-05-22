@@ -67,7 +67,7 @@ test('Claude detector: hook_added fires when a new hook is introduced', async ()
   );
   try {
     const findings = await detectClaudeSettingsDrift(dir.oldRoot, dir.newRoot);
-    const added = findings.find((f) => f.kind === 'hook_added');
+    const added = findings.find((f) => f.kind === 'scope_trail.hook_added');
     assert.ok(added);
     assert.equal(added.subject, 'PreToolUse');
   } finally {
@@ -88,7 +88,7 @@ test('Claude detector: hook_command_changed fires when an existing hook is weake
   );
   try {
     const findings = await detectClaudeSettingsDrift(dir.oldRoot, dir.newRoot);
-    const changed = findings.find((f) => f.kind === 'hook_command_changed');
+    const changed = findings.find((f) => f.kind === 'scope_trail.hook_command_changed');
     assert.ok(changed);
     assert.equal(changed.subject, 'PreToolUse');
     assert.equal(changed.severity, 'high'); // PreToolUse is high-impact
@@ -107,7 +107,7 @@ test('Claude detector: scoped MCP grant does not trip the broad-allow finding', 
   );
   try {
     const findings = await detectClaudeSettingsDrift(dir.oldRoot, dir.newRoot);
-    assert.equal(findings.find((f) => f.kind === 'permission_allow_widened'), undefined);
+    assert.equal(findings.find((f) => f.kind === 'scope_trail.permission_allow_widened'), undefined);
   } finally {
     await rm(dir.root, { recursive: true, force: true });
   }

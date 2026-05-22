@@ -8,7 +8,7 @@ export async function detectClaudeSettingsDrift(oldRoot, newRoot) {
     for (const [permission, line] of newSettings.allow) {
         if (!oldSettings.allow.has(permission) && isBroadAllow(permission)) {
             findings.push({
-                kind: 'permission_allow_widened',
+                kind: 'scope_trail.permission_allow_widened',
                 severity: severityForAllow(permission),
                 file: CLAUDE_SETTINGS_FILE,
                 line,
@@ -21,7 +21,7 @@ export async function detectClaudeSettingsDrift(oldRoot, newRoot) {
     for (const permission of oldSettings.deny.keys()) {
         if (!newSettings.deny.has(permission)) {
             findings.push({
-                kind: 'permission_deny_removed',
+                kind: 'scope_trail.permission_deny_removed',
                 severity: severityForRemovedDeny(permission),
                 file: CLAUDE_SETTINGS_FILE,
                 subject: permission,
@@ -33,7 +33,7 @@ export async function detectClaudeSettingsDrift(oldRoot, newRoot) {
     for (const [hookName, oldCommands] of oldSettings.hookCommands) {
         if (!newSettings.hookCommands.has(hookName)) {
             findings.push({
-                kind: 'hook_removed',
+                kind: 'scope_trail.hook_removed',
                 severity: isHighImpactHook(hookName) ? 'high' : 'medium',
                 file: CLAUDE_SETTINGS_FILE,
                 subject: hookName,
@@ -48,7 +48,7 @@ export async function detectClaudeSettingsDrift(oldRoot, newRoot) {
         const changed = [...newCommands].filter((command) => !oldCommands.has(command));
         if (changed.length > 0 && newCommands.size === oldCommands.size) {
             findings.push({
-                kind: 'hook_command_changed',
+                kind: 'scope_trail.hook_command_changed',
                 severity: isHighImpactHook(hookName) ? 'high' : 'medium',
                 file: CLAUDE_SETTINGS_FILE,
                 subject: hookName,
@@ -63,7 +63,7 @@ export async function detectClaudeSettingsDrift(oldRoot, newRoot) {
     for (const hookName of newSettings.hookCommands.keys()) {
         if (!oldSettings.hookCommands.has(hookName)) {
             findings.push({
-                kind: 'hook_added',
+                kind: 'scope_trail.hook_added',
                 severity: 'low',
                 file: CLAUDE_SETTINGS_FILE,
                 subject: hookName,

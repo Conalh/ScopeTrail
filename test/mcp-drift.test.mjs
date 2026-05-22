@@ -14,7 +14,7 @@ test('detects added MCP server with unpinned command', async () => {
 
   assert.deepEqual(
     findings.map((finding) => finding.kind),
-    ['mcp_server_added', 'unpinned_mcp_command']
+    ['scope_trail.mcp_server_added', 'scope_trail.unpinned_mcp_command']
   );
   assert.equal(findings[0].subject, 'stripe-admin');
   assert.equal(findings[0].line, 7);
@@ -32,10 +32,10 @@ test('detects MCP drift in Cursor and VS Code config files', async () => {
   assert.deepEqual(
     findings.map((finding) => [finding.file, finding.kind, finding.subject, finding.line]),
     [
-      ['.cursor/mcp.json', 'mcp_server_added', 'browser-tools', 3],
-      ['.cursor/mcp.json', 'unpinned_mcp_command', 'browser-tools', 5],
-      ['.vscode/mcp.json', 'mcp_server_added', 'docs-search', 3],
-      ['.vscode/mcp.json', 'unpinned_mcp_command', 'docs-search', 5]
+      ['.cursor/mcp.json', 'scope_trail.mcp_server_added', 'browser-tools', 3],
+      ['.cursor/mcp.json', 'scope_trail.unpinned_mcp_command', 'browser-tools', 5],
+      ['.vscode/mcp.json', 'scope_trail.mcp_server_added', 'docs-search', 3],
+      ['.vscode/mcp.json', 'scope_trail.unpinned_mcp_command', 'docs-search', 5]
     ]
   );
 });
@@ -49,9 +49,9 @@ test('detects MCP drift in Windsurf config files', async () => {
   assert.deepEqual(
     findings.map((finding) => [finding.file, finding.kind, finding.subject, finding.line]),
     [
-      ['.codeium/windsurf/mcp_config.json', 'mcp_server_command_changed', 'team-registry', 4],
-      ['.codeium/windsurf/mcp_config.json', 'mcp_server_added', 'browser-tools', 6],
-      ['.codeium/windsurf/mcp_config.json', 'unpinned_mcp_command', 'browser-tools', 8]
+      ['.codeium/windsurf/mcp_config.json', 'scope_trail.mcp_server_command_changed', 'team-registry', 4],
+      ['.codeium/windsurf/mcp_config.json', 'scope_trail.mcp_server_added', 'browser-tools', 6],
+      ['.codeium/windsurf/mcp_config.json', 'scope_trail.unpinned_mcp_command', 'browser-tools', 8]
     ]
   );
 });
@@ -62,16 +62,16 @@ test('detects sample MCP config drift without treating it as active server drift
 
   const findings = await detectMcpDrift(oldDir, newDir);
 
-  assert.equal(findings.some((finding) => finding.kind === 'mcp_server_added'), false);
-  assert.equal(findings.some((finding) => finding.kind === 'unpinned_mcp_command'), false);
+  assert.equal(findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
+  assert.equal(findings.some((finding) => finding.kind === 'scope_trail.unpinned_mcp_command'), false);
   assert.deepEqual(
     findings.map((finding) => [finding.file, finding.kind, finding.subject, finding.severity, finding.line]),
     [
-      ['examples/.mcp.json.sample', 'mcp_sample_server_added', 'docs-search', 'low', 3],
-      ['examples/.mcp.json.sample', 'mcp_sample_server_added', 'copy-risk', 'low', 7],
-      ['examples/.mcp.json.sample', 'mcp_sample_unpinned_command', 'copy-risk', 'medium', 9],
-      ['examples/.mcp.json.sample', 'mcp_sample_server_added', 'remote-admin', 'low', 11],
-      ['examples/.mcp.json.sample', 'mcp_sample_remote_endpoint', 'remote-admin', 'medium', 12]
+      ['examples/.mcp.json.sample', 'scope_trail.mcp_sample_server_added', 'docs-search', 'low', 3],
+      ['examples/.mcp.json.sample', 'scope_trail.mcp_sample_server_added', 'copy-risk', 'low', 7],
+      ['examples/.mcp.json.sample', 'scope_trail.mcp_sample_unpinned_command', 'copy-risk', 'medium', 9],
+      ['examples/.mcp.json.sample', 'scope_trail.mcp_sample_server_added', 'remote-admin', 'low', 11],
+      ['examples/.mcp.json.sample', 'scope_trail.mcp_sample_remote_endpoint', 'remote-admin', 'medium', 12]
     ]
   );
 });
@@ -99,15 +99,15 @@ test('detects platform-suffixed MCP example drift without treating it as active 
 
   const findings = await detectMcpDrift(oldDir, newDir);
 
-  assert.equal(findings.some((finding) => finding.kind === 'mcp_server_added'), false);
-  assert.equal(findings.some((finding) => finding.kind === 'unpinned_mcp_command'), false);
+  assert.equal(findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
+  assert.equal(findings.some((finding) => finding.kind === 'scope_trail.unpinned_mcp_command'), false);
   assert.deepEqual(
     findings.map((finding) => [finding.file, finding.kind, finding.subject, finding.severity, finding.line]),
     [
-      ['examples/.mcp.json.example.mac', 'mcp_sample_server_added', 'mac-docs', 'low', 3],
-      ['examples/.mcp.json.example.mac', 'mcp_sample_remote_endpoint', 'mac-docs', 'medium', 4],
-      ['examples/.mcp.json.windows.example', 'mcp_sample_server_added', 'win-tools', 'low', 3],
-      ['examples/.mcp.json.windows.example', 'mcp_sample_unpinned_command', 'win-tools', 'medium', 7]
+      ['examples/.mcp.json.example.mac', 'scope_trail.mcp_sample_server_added', 'mac-docs', 'low', 3],
+      ['examples/.mcp.json.example.mac', 'scope_trail.mcp_sample_remote_endpoint', 'mac-docs', 'medium', 4],
+      ['examples/.mcp.json.windows.example', 'scope_trail.mcp_sample_server_added', 'win-tools', 'low', 3],
+      ['examples/.mcp.json.windows.example', 'scope_trail.mcp_sample_unpinned_command', 'win-tools', 'medium', 7]
     ]
   );
 });
@@ -118,15 +118,15 @@ test('detects prefixed MCP config example drift without treating it as active se
 
   const findings = await detectMcpDrift(oldDir, newDir);
 
-  assert.equal(findings.some((finding) => finding.kind === 'mcp_server_added'), false);
-  assert.equal(findings.some((finding) => finding.kind === 'unpinned_mcp_command'), false);
+  assert.equal(findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
+  assert.equal(findings.some((finding) => finding.kind === 'scope_trail.unpinned_mcp_command'), false);
   assert.deepEqual(
     findings.map((finding) => [finding.file, finding.kind, finding.subject, finding.severity, finding.line]),
     [
-      ['examples/cursor_mcp_config.json', 'mcp_sample_server_added', 'cursor-docs', 'low', 3],
-      ['examples/cursor_mcp_config.json', 'mcp_sample_remote_endpoint', 'cursor-docs', 'medium', 4],
-      ['examples/example_mcp_config.json', 'mcp_sample_server_added', 'copy-risk', 'low', 3],
-      ['examples/example_mcp_config.json', 'mcp_sample_unpinned_command', 'copy-risk', 'medium', 7]
+      ['examples/cursor_mcp_config.json', 'scope_trail.mcp_sample_server_added', 'cursor-docs', 'low', 3],
+      ['examples/cursor_mcp_config.json', 'scope_trail.mcp_sample_remote_endpoint', 'cursor-docs', 'medium', 4],
+      ['examples/example_mcp_config.json', 'scope_trail.mcp_sample_server_added', 'copy-risk', 'low', 3],
+      ['examples/example_mcp_config.json', 'scope_trail.mcp_sample_unpinned_command', 'copy-risk', 'medium', 7]
     ]
   );
 });

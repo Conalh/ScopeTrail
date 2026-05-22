@@ -15,10 +15,10 @@ test('detects Codex config permission drift', async () => {
   assert.deepEqual(
     findings.map((finding) => [finding.kind, finding.subject, finding.severity, finding.line]),
     [
-      ['codex_sandbox_widened', 'sandbox_mode', 'critical', 1],
-      ['codex_approval_weakened', 'approval_policy', 'high', 2],
-      ['codex_network_enabled', 'sandbox_workspace_write.network_access', 'medium', 5],
-      ['codex_project_trusted', 'projects.trust_level', 'high', 8]
+      ['scope_trail.codex_sandbox_widened', 'sandbox_mode', 'critical', 1],
+      ['scope_trail.codex_approval_weakened', 'approval_policy', 'high', 2],
+      ['scope_trail.codex_network_enabled', 'sandbox_workspace_write.network_access', 'medium', 5],
+      ['scope_trail.codex_project_trusted', 'projects.trust_level', 'high', 8]
     ]
   );
 });

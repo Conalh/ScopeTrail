@@ -55,7 +55,7 @@ export async function detectMcpDrift(oldRoot, newRoot) {
             const oldServer = oldServers[name];
             if (!oldServer) {
                 findings.push({
-                    kind: 'mcp_server_added',
+                    kind: 'scope_trail.mcp_server_added',
                     severity: 'high',
                     file: config.path,
                     line: newServer.line,
@@ -66,7 +66,7 @@ export async function detectMcpDrift(oldRoot, newRoot) {
             }
             else if (serverCommand(newServer) !== serverCommand(oldServer)) {
                 findings.push({
-                    kind: 'mcp_server_command_changed',
+                    kind: 'scope_trail.mcp_server_command_changed',
                     severity: 'medium',
                     file: config.path,
                     line: lineForServerCommand(newServer) ?? newServer.line,
@@ -77,7 +77,7 @@ export async function detectMcpDrift(oldRoot, newRoot) {
             }
             if ((!oldServer || serverCommand(newServer) !== serverCommand(oldServer)) && isUnpinnedCommand(newServer)) {
                 findings.push({
-                    kind: 'unpinned_mcp_command',
+                    kind: 'scope_trail.unpinned_mcp_command',
                     severity: 'high',
                     file: config.path,
                     line: lineForUnpinnedCommand(newServer) ?? newServer.line,
@@ -97,7 +97,7 @@ export async function detectMcpDrift(oldRoot, newRoot) {
             const changed = oldServer && serverCommand(newServer) !== serverCommand(oldServer);
             if (!oldServer) {
                 findings.push({
-                    kind: 'mcp_sample_server_added',
+                    kind: 'scope_trail.mcp_sample_server_added',
                     severity: 'low',
                     file: path,
                     line: newServer.line,
@@ -108,7 +108,7 @@ export async function detectMcpDrift(oldRoot, newRoot) {
             }
             else if (changed) {
                 findings.push({
-                    kind: 'mcp_sample_server_command_changed',
+                    kind: 'scope_trail.mcp_sample_server_command_changed',
                     severity: 'low',
                     file: path,
                     line: lineForServerCommand(newServer) ?? newServer.line,
@@ -119,7 +119,7 @@ export async function detectMcpDrift(oldRoot, newRoot) {
             }
             if ((!oldServer || changed) && isUnpinnedCommand(newServer)) {
                 findings.push({
-                    kind: 'mcp_sample_unpinned_command',
+                    kind: 'scope_trail.mcp_sample_unpinned_command',
                     severity: severityForSampleCommandRisk(newServer),
                     file: path,
                     line: lineForUnpinnedCommand(newServer) ?? newServer.line,
@@ -131,7 +131,7 @@ export async function detectMcpDrift(oldRoot, newRoot) {
             const endpoint = remoteEndpoint(newServer);
             if ((!oldServer || changed) && endpoint) {
                 findings.push({
-                    kind: 'mcp_sample_remote_endpoint',
+                    kind: 'scope_trail.mcp_sample_remote_endpoint',
                     severity: 'medium',
                     file: path,
                     line: lineForRemoteEndpoint(newServer) ?? newServer.line,
