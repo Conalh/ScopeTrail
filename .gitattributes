@@ -1,1 +1,18 @@
 * text=auto
+
+# Pin source and generated text files to LF so Windows checkouts under
+# core.autocrlf=true don't oscillate between LF and CRLF.
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.ts    text eol=lf
+*.json  text eol=lf
+*.jsonc text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.md    text eol=lf
+*.sh    text eol=lf
+.gitattributes text eol=lf
+.gitignore     text eol=lf
+LICENSE        text eol=lf
