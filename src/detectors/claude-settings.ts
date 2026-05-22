@@ -5,6 +5,21 @@ export const CLAUDE_SETTINGS_FILE = '.claude/settings.json';
 export const CLAUDE_TARGET_PATHS: readonly string[] = [CLAUDE_SETTINGS_FILE];
 
 export async function detectClaudeSettingsDrift(oldRoot: string, newRoot: string): Promise<Finding[]> {
+  // Invalid JSON used to escape from readJsonObjectWithSource and
+  // crash the CLI before any report could be produced. Surface it as
+  // a finding instead so fail-on semantics still apply.
+  const newSource = await readJsonObjectWithSource(configPath(newRoot, CLAUDE_SETTINGS_FILE));
+  if (newSource.parseError) {
+    return [{
+      kind: 'scope_trail.claude_settings_syntax_error',
+      severity: 'high',
+      file: CLAUDE_SETTINGS_FILE,
+      subject: CLAUDE_SETTINGS_FILE,
+      message: `Claude settings file failed to parse: ${newSource.parseError.message}`,
+      recommendation: 'Fix the JSON syntax. ScopeTrail cannot reason about permission drift while the file is invalid.'
+    }];
+  }
+
   const oldSettings = await readClaudeSettings(oldRoot);
   const newSettings = await readClaudeSettings(newRoot);
   const findings: Finding[] = [];

@@ -9,18 +9,31 @@ export async function readJsonObject(path) {
  * agent-gov-core, then JSON.parse runs against the stripped (but
  * position-preserving) text. Missing files resolve to an empty object so
  * detectors can run on repos that haven't adopted Claude settings yet.
+ *
+ * Invalid JSON returns `{ json: {}, text: raw, parseError }` rather
+ * than throwing — callers emit findings, not crashes.
  */
 export async function readJsonObjectWithSource(path) {
+    let raw;
     try {
-        const raw = await readFile(path, 'utf8');
-        const parsed = JSON.parse(stripJsonComments(raw));
-        return { json: isRecord(parsed) ? parsed : {}, text: raw };
+        raw = await readFile(path, 'utf8');
     }
     catch (error) {
         if (isNodeError(error) && error.code === 'ENOENT') {
             return { json: {}, text: '' };
         }
         throw error;
+    }
+    try {
+        const parsed = JSON.parse(stripJsonComments(raw));
+        return { json: isRecord(parsed) ? parsed : {}, text: raw };
+    }
+    catch (error) {
+        return {
+            json: {},
+            text: raw,
+            parseError: error instanceof Error ? error : new Error(String(error))
+        };
     }
 }
 export function configPath(root, relativePath) {

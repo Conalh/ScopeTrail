@@ -50,6 +50,23 @@ export const MCP_TARGET_PATHS = MCP_CONFIGS.map((config) => config.path);
 export async function detectMcpDrift(oldRoot, newRoot) {
     const findings = [];
     for (const config of MCP_CONFIGS) {
+        // Surface invalid JSON as a finding instead of silently producing
+        // an empty server map (which would let real drift slip through
+        // and look like a clean report). Skip the diff for this file
+        // when the new copy is unparseable — false "added" findings on
+        // an empty parse would just add noise.
+        const newSource = await readJsonObjectWithSource(configPath(newRoot, config.path));
+        if (newSource.parseError) {
+            findings.push({
+                kind: 'scope_trail.mcp_config_syntax_error',
+                severity: 'high',
+                file: config.path,
+                subject: config.path,
+                message: `MCP config "${config.path}" failed to parse: ${newSource.parseError.message}`,
+                recommendation: 'Fix the JSON syntax. ScopeTrail cannot reason about server permissions while the file is invalid.'
+            });
+            continue;
+        }
         const oldServers = await readMcpServers(oldRoot, config);
         const newServers = await readMcpServers(newRoot, config);
         for (const [name, newServer] of Object.entries(newServers)) {
@@ -108,6 +125,21 @@ export async function detectMcpDrift(oldRoot, newRoot) {
     }
     for (const path of await listMcpSampleConfigPaths(oldRoot, newRoot)) {
         const config = { path, serverKeys: ['mcpServers', 'servers'] };
+        const newSource = await readJsonObjectWithSource(configPath(newRoot, path));
+        if (newSource.parseError) {
+            // Sample configs are advisory examples, not live servers, so
+            // syntax errors here are lower severity than the active
+            // .mcp.json equivalent.
+            findings.push({
+                kind: 'scope_trail.mcp_sample_config_syntax_error',
+                severity: 'low',
+                file: path,
+                subject: path,
+                message: `Sample MCP config "${path}" failed to parse: ${newSource.parseError.message}`,
+                recommendation: 'Fix the JSON syntax so users who copy this sample get a parseable starting point.'
+            });
+            continue;
+        }
         const oldServers = await readMcpServers(oldRoot, config);
         const newServers = await readMcpServers(newRoot, config);
         for (const [name, newServer] of Object.entries(newServers)) {

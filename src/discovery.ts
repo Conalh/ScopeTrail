@@ -13,6 +13,13 @@ export async function readJsonObject(path: string): Promise<Record<string, unkno
 export interface JsonObjectSource {
   json: Record<string, unknown>;
   text: string;
+  /**
+   * Set when the file existed but JSON parsing failed. The CLI used
+   * to crash with a raw SyntaxError on invalid JSON, bypassing the
+   * whole ScopeTrail report pipeline. Surface the error so detectors
+   * can emit a `*_config_syntax_error` finding instead.
+   */
+  parseError?: Error;
 }
 
 /**
@@ -20,18 +27,30 @@ export interface JsonObjectSource {
  * agent-gov-core, then JSON.parse runs against the stripped (but
  * position-preserving) text. Missing files resolve to an empty object so
  * detectors can run on repos that haven't adopted Claude settings yet.
+ *
+ * Invalid JSON returns `{ json: {}, text: raw, parseError }` rather
+ * than throwing — callers emit findings, not crashes.
  */
 export async function readJsonObjectWithSource(path: string): Promise<JsonObjectSource> {
+  let raw: string;
   try {
-    const raw = await readFile(path, 'utf8');
-    const parsed: unknown = JSON.parse(stripJsonComments(raw));
-    return { json: isRecord(parsed) ? parsed : {}, text: raw };
+    raw = await readFile(path, 'utf8');
   } catch (error) {
     if (isNodeError(error) && error.code === 'ENOENT') {
       return { json: {}, text: '' };
     }
-
     throw error;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(stripJsonComments(raw));
+    return { json: isRecord(parsed) ? parsed : {}, text: raw };
+  } catch (error) {
+    return {
+      json: {},
+      text: raw,
+      parseError: error instanceof Error ? error : new Error(String(error))
+    };
   }
 }
 
