@@ -10,7 +10,7 @@ Code review for AI agent permission drift.
 ScopeTrail is a free OSS CLI and GitHub Action that reviews pull requests for risky changes to AI-agent configuration files.
 
 - `.mcp.json`
-- `.mcp.json.sample`, `.mcp.json.template`, `.mcp.json.disabled`, and `.mcp.json.example`
+- `.mcp.json.sample`, `.mcp.json.template`, `.mcp.json.disabled`, `.mcp.json.example`, and platform-suffixed examples such as `.mcp.json.windows.example`
 - `.cursor/mcp.json`
 - `.vscode/mcp.json`
 - `.codeium/windsurf/mcp_config.json`
@@ -120,7 +120,7 @@ ScopeTrail v0 detects:
 - Cursor, VS Code, and Windsurf MCP config files using `mcpServers` or `servers` where supported.
 - Windsurf remote MCP endpoint changes through `serverUrl`.
 - Sample/template/disabled MCP config drift as a separate advisory category, not active server drift.
-- Risky copied MCP examples such as `.mcp.json.sample`, `.mcp.json.template`, `.mcp.json.disabled`, and nested `mcp_config.json.example` files with unpinned commands or remote endpoints.
+- Risky copied MCP examples such as `.mcp.json.sample`, `.mcp.json.template`, `.mcp.json.disabled`, `.mcp.json.windows.example`, `.mcp.json.example.mac`, and nested `mcp_config.json.example` files with unpinned commands or remote endpoints.
 - Broad Claude Code allow rules such as `Bash(npm *)` and `Read(~/**)`. Scoped grants (`WebFetch(domain:example.com)`, `mcp__github__get_issue`) are recognized as narrow and not flagged.
 - Removed Claude Code deny rules for sensitive files such as `.env`.
 - Claude Code hook changes: **removed**, **added**, and **command-changed** (a strict `PreToolUse` swapped for a no-op script is the same risk as a removal — both are now caught).

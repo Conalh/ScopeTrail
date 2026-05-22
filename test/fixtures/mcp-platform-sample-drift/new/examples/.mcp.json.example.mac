@@ -1,0 +1,7 @@
+{
+  "servers": {
+    "mac-docs": {
+      "url": "https://mcp.example.com/sse"
+    }
+  }
+}

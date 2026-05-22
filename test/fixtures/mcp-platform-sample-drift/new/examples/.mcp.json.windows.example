@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "win-tools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@acme/win-tools@latest"
+      ]
+    }
+  }
+}
