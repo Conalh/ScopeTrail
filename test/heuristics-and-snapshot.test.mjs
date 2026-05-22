@@ -57,6 +57,25 @@ test('isBroadAllow: bare tokens and wildcard scopes ARE broad', () => {
   assert.equal(isBroadAllow('mcp__*'), true);
 });
 
+test('isBroadAllow: bare Bash/Read/Write/Edit ARE broad (regression for security gap)', () => {
+  // Pre-fix gap: bare `"Bash"` grants unlimited shell execution but
+  // the regex required a parenthesized scope, so it silently slipped
+  // through. Same for `"Read"`/`"Write"`/`"Edit"`. The asymmetry —
+  // bare WebFetch was flagged while bare Bash wasn't — was the tell.
+  assert.equal(isBroadAllow('Bash'), true);
+  assert.equal(isBroadAllow('Read'), true);
+  assert.equal(isBroadAllow('Write'), true);
+  assert.equal(isBroadAllow('Edit'), true);
+});
+
+test('isBroadAllow: narrowly-scoped Bash/Read/Write/Edit stay narrow', () => {
+  // The bare-verb fix must not over-fire on legitimate narrow scopes.
+  assert.equal(isBroadAllow('Bash(npm test)'), false);
+  assert.equal(isBroadAllow('Bash(git status)'), false);
+  assert.equal(isBroadAllow('Read(./src/foo.txt)'), false);
+  assert.equal(isBroadAllow('Edit(./README.md)'), false);
+});
+
 test('Claude detector: hook_added fires when a new hook is introduced', async () => {
   const dir = await makeClaudeFixture(
     { permissions: { allow: [], deny: [] }, hooks: {} },

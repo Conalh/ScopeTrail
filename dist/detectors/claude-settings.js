@@ -144,13 +144,21 @@ function hookHasEntries(value) {
 // its grants properly. Bare tokens and explicit wildcards are still broad.
 export function isBroadAllow(permission) {
     const normalized = permission.toLowerCase();
-    if (/\bbash\([^)]*\*[^)]*\)/.test(normalized)) {
+    // Bare verb (no parentheses) or wildcard-scoped verb for any of the
+    // dangerous operations. This catches `"Bash"`, `"Read"`, `"Write"`,
+    // `"Edit"`, `"WebFetch"`, etc. — bare tokens that grant unlimited
+    // access. Previously only WebFetch/WebSearch/Task went through this
+    // check, which silently let `"Bash"` and bare `"Read"`/`"Write"`/
+    // `"Edit"` slip past unflagged.
+    if (isBroadVerbGrant(normalized, ['bash', 'read', 'write', 'edit', 'webfetch', 'websearch', 'task'])) {
         return true;
     }
+    // Scoped grants whose target is a rooted path (absolute, home-rel,
+    // or Windows drive). `Read(/etc/passwd)` doesn't include `*` but is
+    // still broader than a workspace-relative path. Stays separate from
+    // the verb-grant check because that path-shape rule only applies to
+    // file-access verbs, not network/task verbs.
     if (/\b(read|write|edit)\((~|[a-z]:\\|\/|\*\*)/.test(normalized)) {
-        return true;
-    }
-    if (isBroadVerbGrant(normalized, ['webfetch', 'websearch', 'task'])) {
         return true;
     }
     if (isBroadMcpGrant(normalized)) {
