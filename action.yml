@@ -65,9 +65,20 @@ runs:
         report_file="${RUNNER_TEMP:-.}/scopetrail-report.md"
         json_file="${RUNNER_TEMP:-.}/scopetrail-report.json"
 
-        node "$GITHUB_ACTION_PATH/dist/index.js" diff --repo "$repo" --base "$base" --head "$head" --format markdown | tee "$report_file"
-        node "$GITHUB_ACTION_PATH/dist/index.js" diff --repo "$repo" --base "$base" --head "$head" --format json > "$json_file"
-        node "$GITHUB_ACTION_PATH/dist/index.js" diff --repo "$repo" --base "$base" --head "$head" --format github
+        # Single scan: stdout streams GitHub annotations so the runner
+        # picks up ::warning lines, while --out-markdown and --out-json
+        # capture the other two renderings from the same run. Previously
+        # this ran the CLI three times (markdown/json/github), repeating
+        # both git snapshot materialization and full detector work.
+        node "$GITHUB_ACTION_PATH/dist/index.js" diff \
+          --repo "$repo" --base "$base" --head "$head" \
+          --format github \
+          --out-markdown "$report_file" \
+          --out-json "$json_file"
+
+        # Surface the markdown report in the Action log for parity
+        # with the prior `tee` of `--format markdown`.
+        cat "$report_file"
 
         if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
           cat "$report_file" >> "$GITHUB_STEP_SUMMARY"

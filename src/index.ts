@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { detectClaudeSettingsDrift } from './detectors/claude-settings.js';
 import { detectCodexConfigDrift } from './detectors/codex-config.js';
@@ -9,7 +10,7 @@ import { createReport, renderReport, type ReportFormat } from './report.js';
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (argv.length === 0 || argv.includes('--help') || argv.includes('-h')) {
-    process.stdout.write('Usage: scopetrail diff --old <dir> --new <dir> [--format text|markdown|json]\n');
+    process.stdout.write('Usage: scopetrail diff --old <dir> --new <dir> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH]\n');
     return 0;
   }
 
@@ -28,34 +29,57 @@ async function runDiff(argv: string[]): Promise<number> {
     return 2;
   }
 
+  let oldRoot: string;
+  let newRoot: string;
+  let cleanup: (() => Promise<void>) | undefined;
+
   if (parsed.mode === 'directories') {
-    const findings = [
-      ...(await detectMcpDrift(parsed.oldRoot, parsed.newRoot)),
-      ...(await detectClaudeSettingsDrift(parsed.oldRoot, parsed.newRoot)),
-      ...(await detectCodexConfigDrift(parsed.oldRoot, parsed.newRoot))
-    ];
-    process.stdout.write(renderReport(createReport(findings), parsed.format));
-    return 0;
+    oldRoot = parsed.oldRoot;
+    newRoot = parsed.newRoot;
+  } else {
+    const baseSnapshot = await materializeGitSnapshot(parsed.repo, parsed.base);
+    const headSnapshot = await materializeGitSnapshot(parsed.repo, parsed.head);
+    oldRoot = baseSnapshot.root;
+    newRoot = headSnapshot.root;
+    cleanup = async () => {
+      await Promise.all([baseSnapshot.cleanup(), headSnapshot.cleanup()]);
+    };
   }
 
-  const baseSnapshot = await materializeGitSnapshot(parsed.repo, parsed.base);
-  const headSnapshot = await materializeGitSnapshot(parsed.repo, parsed.head);
   try {
+    // Run all detectors once and render the resulting report into
+    // every requested output. Previously the GitHub Action invoked
+    // the CLI three times for markdown/json/github, which repeated
+    // git snapshot materialization and detector work on each call.
     const findings = [
-      ...(await detectMcpDrift(baseSnapshot.root, headSnapshot.root)),
-      ...(await detectClaudeSettingsDrift(baseSnapshot.root, headSnapshot.root)),
-      ...(await detectCodexConfigDrift(baseSnapshot.root, headSnapshot.root))
+      ...(await detectMcpDrift(oldRoot, newRoot)),
+      ...(await detectClaudeSettingsDrift(oldRoot, newRoot)),
+      ...(await detectCodexConfigDrift(oldRoot, newRoot))
     ];
-    process.stdout.write(renderReport(createReport(findings), parsed.format));
+    const report = createReport(findings);
+
+    if (parsed.outMarkdown) {
+      await writeFile(parsed.outMarkdown, renderReport(report, 'markdown'));
+    }
+    if (parsed.outJson) {
+      await writeFile(parsed.outJson, renderReport(report, 'json'));
+    }
+    process.stdout.write(renderReport(report, parsed.format));
     return 0;
   } finally {
-    await Promise.all([baseSnapshot.cleanup(), headSnapshot.cleanup()]);
+    await cleanup?.();
   }
 }
 
+interface CommonDiffArgs {
+  format: ReportFormat;
+  outMarkdown?: string;
+  outJson?: string;
+}
+
 type ParsedDiffArgs =
-  | { ok: true; mode: 'directories'; oldRoot: string; newRoot: string; format: ReportFormat }
-  | { ok: true; mode: 'git'; repo: string; base: string; head: string; format: ReportFormat }
+  | ({ ok: true; mode: 'directories'; oldRoot: string; newRoot: string } & CommonDiffArgs)
+  | ({ ok: true; mode: 'git'; repo: string; base: string; head: string } & CommonDiffArgs)
   | { ok: false; error: string };
 
 function parseDiffArgs(argv: string[]): ParsedDiffArgs {
@@ -65,6 +89,8 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
   let head: string | undefined;
   let repo = process.cwd();
   let format: ReportFormat = 'text';
+  let outMarkdown: string | undefined;
+  let outJson: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -91,6 +117,18 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
       }
       format = value;
       index += 1;
+    } else if (arg === '--out-markdown') {
+      if (!value) {
+        return { ok: false, error: 'Missing path for --out-markdown.' };
+      }
+      outMarkdown = value;
+      index += 1;
+    } else if (arg === '--out-json') {
+      if (!value) {
+        return { ok: false, error: 'Missing path for --out-json.' };
+      }
+      outJson = value;
+      index += 1;
     } else {
       return { ok: false, error: `Unknown argument: ${arg}` };
     }
@@ -112,7 +150,7 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
       return { ok: false, error: 'Missing required --head <ref> argument.' };
     }
 
-    return { ok: true, mode: 'git', repo, base, head, format };
+    return { ok: true, mode: 'git', repo, base, head, format, outMarkdown, outJson };
   }
 
   if (!oldRoot) {
@@ -123,7 +161,7 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
     return { ok: false, error: 'Missing required --new <dir> argument.' };
   }
 
-  return { ok: true, mode: 'directories', oldRoot, newRoot, format };
+  return { ok: true, mode: 'directories', oldRoot, newRoot, format, outMarkdown, outJson };
 }
 
 function isReportFormat(value: string | undefined): value is ReportFormat {
@@ -139,7 +177,7 @@ if (invokedPath) {
 function usage(): string {
   return [
     'Usage:',
-    '  scopetrail diff --old <dir> --new <dir> [--format text|markdown|json|github]',
-    '  scopetrail diff --repo <repo> --base <ref> --head <ref> [--format text|markdown|json|github]'
+    '  scopetrail diff --old <dir> --new <dir> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH]',
+    '  scopetrail diff --repo <repo> --base <ref> --head <ref> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH]'
   ].join('\n');
 }
