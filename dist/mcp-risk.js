@@ -59,3 +59,26 @@ function hasExactVersion(value) {
     const version = value.slice(packageVersion + 1);
     return /^\d+\.\d+\.\d+/.test(version);
 }
+export function remoteEndpoint(spec) {
+    return [spec.url, spec.serverUrl].find((value) => Boolean(value && isRemoteEndpoint(value)));
+}
+export function isRemoteEndpoint(value) {
+    try {
+        const url = new URL(value);
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+            return false;
+        }
+        return !['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+    }
+    catch {
+        return false;
+    }
+}
+export function isUnencryptedEndpoint(value) {
+    try {
+        return new URL(value).protocol === 'http:';
+    }
+    catch {
+        return false;
+    }
+}

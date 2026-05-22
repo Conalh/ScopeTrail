@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { lineOfTomlKey, parseToml } from 'agent-gov-core';
 import { configPath } from '../discovery.js';
-import { isUnpinnedCommand, serverCommand } from '../mcp-risk.js';
+import { isUnpinnedCommand, serverCommand, remoteEndpoint, isUnencryptedEndpoint } from '../mcp-risk.js';
 export const CODEX_CONFIG_FILE = '.codex/config.toml';
 export const CODEX_TARGET_PATHS = [CODEX_CONFIG_FILE];
 export async function detectCodexConfigDrift(oldRoot, newRoot) {
@@ -114,6 +114,23 @@ async function detectCodexMcpDrift(oldRoot, newRoot) {
                 recommendation: 'Pin executable packages to an exact version and avoid pipe-to-shell installation commands.'
             });
         }
+        const endpoint = remoteEndpoint(newServer);
+        if ((!oldServer || commandChanged) && endpoint) {
+            const unencrypted = isUnencryptedEndpoint(endpoint);
+            findings.push({
+                kind: 'scope_trail.codex_mcp_remote_endpoint',
+                severity: unencrypted ? 'critical' : 'high',
+                file: CODEX_CONFIG_FILE,
+                line: lineForServer(newServer),
+                subject: name,
+                message: unencrypted
+                    ? `Codex MCP server "${name}" points at an unencrypted remote endpoint: ${endpoint}.`
+                    : `Codex MCP server "${name}" points at remote endpoint: ${endpoint}.`,
+                recommendation: unencrypted
+                    ? 'Use https:// for remote MCP endpoints — prompt data and tool executions must not go over unencrypted transport.'
+                    : 'Confirm the endpoint is trusted and does not expose unexpected data or tools to external hosts.'
+            });
+        }
     }
     return findings;
 }
@@ -152,7 +169,10 @@ async function readCodexMcpServers(root) {
             args: Array.isArray(entry.args)
                 ? entry.args.filter((arg) => typeof arg === 'string')
                 : undefined,
-            url: typeof entry.url === 'string' ? entry.url : undefined
+            url: typeof entry.url === 'string' ? entry.url : undefined,
+            serverUrl: typeof entry.serverUrl === 'string'
+                ? entry.serverUrl
+                : (typeof entry.server_url === 'string' ? entry.server_url : undefined)
         });
     }
     return servers;
@@ -161,7 +181,7 @@ function lineForServer(server) {
     // Point at the leaf the reviewer most needs to see — `command`
     // first, then any of the args/url keys. Fall back to file-level
     // when nothing matches so the finding still surfaces.
-    for (const leaf of ['command', 'args', 'url']) {
+    for (const leaf of ['command', 'args', 'url', 'serverUrl', 'server_url']) {
         const line = lineOfTomlKey(server.text, `mcp_servers.${server.name}.${leaf}`);
         if (line) {
             return line;

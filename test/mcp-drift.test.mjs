@@ -157,6 +157,7 @@ test('detects MCP drift in Windsurf config files', async () => {
     findings.map((finding) => [finding.file, finding.kind, finding.subject, finding.line]),
     [
       ['.codeium/windsurf/mcp_config.json', 'scope_trail.mcp_server_command_changed', 'team-registry', 4],
+      ['.codeium/windsurf/mcp_config.json', 'scope_trail.mcp_remote_endpoint', 'team-registry', 4],
       ['.codeium/windsurf/mcp_config.json', 'scope_trail.mcp_server_added', 'browser-tools', 6],
       ['.codeium/windsurf/mcp_config.json', 'scope_trail.unpinned_mcp_command', 'browser-tools', 8]
     ]
@@ -237,3 +238,41 @@ test('detects prefixed MCP config example drift without treating it as active se
     ]
   );
 });
+
+test('mcp_remote_endpoint: http:// fires critical severity, https:// fires high', async () => {
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-active-http-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(newDir, { recursive: true });
+    writeFileSync(join(oldDir, '.mcp.json'), JSON.stringify({ mcpServers: {} }));
+    writeFileSync(
+      join(newDir, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          'plain-remote': { serverUrl: 'http://mcp.example.com/insecure' },
+          'tls-remote': { serverUrl: 'https://mcp.example.com/safe' }
+        }
+      }, null, 2)
+    );
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    const remoteEndpoint = findings.filter((f) => f.kind === 'scope_trail.mcp_remote_endpoint');
+    const bySubject = Object.fromEntries(remoteEndpoint.map((f) => [f.subject, f]));
+
+    assert.ok(bySubject['plain-remote'], 'expected active remote_endpoint finding for plain-remote');
+    assert.equal(bySubject['plain-remote'].severity, 'critical');
+    assert.match(bySubject['plain-remote'].message, /unencrypted/);
+
+    assert.ok(bySubject['tls-remote'], 'expected active remote_endpoint finding for tls-remote');
+    assert.equal(bySubject['tls-remote'].severity, 'high');
+    assert.doesNotMatch(bySubject['tls-remote'].message, /unencrypted/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+

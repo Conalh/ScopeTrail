@@ -79,3 +79,29 @@ function hasExactVersion(value: string): boolean {
   const version = value.slice(packageVersion + 1);
   return /^\d+\.\d+\.\d+/.test(version);
 }
+
+export function remoteEndpoint(spec: McpCommandShape): string | undefined {
+  return [spec.url, spec.serverUrl].find((value): value is string => Boolean(value && isRemoteEndpoint(value)));
+}
+
+export function isRemoteEndpoint(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return false;
+    }
+
+    return !['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function isUnencryptedEndpoint(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
