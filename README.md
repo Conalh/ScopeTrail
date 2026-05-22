@@ -23,7 +23,7 @@ ScopeTrail is a free OSS CLI and GitHub Action that reviews pull requests for ri
 
 It is intentionally not a hosted scanner. The Action reads the checked-out repository, uploads nothing by default, and starts advisory with `fail-on: none`.
 
-Before you install with `fail-on: none`, see [Trust and permissions](docs/TRUST.md). For rollout, use the [Adoption checklist](docs/ADOPTION.md) and [Pilot guide](docs/PILOT.md). For the paid-team validation boundary, see [Team-layer validation](docs/TEAM_VALIDATION.md).
+Before you install with `fail-on: none`, see [Trust and permissions](docs/TRUST.md). For rollout, use the [Adoption checklist](docs/ADOPTION.md) and [Pilot guide](docs/PILOT.md).
 
 Pilot ScopeTrail in a real repository and share team feedback in the [active pilot issue](https://github.com/Conalh/ScopeTrail/issues/18).
 
