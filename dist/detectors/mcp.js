@@ -16,6 +16,12 @@ const MCP_SAMPLE_CONFIG_FILENAMES = new Set([
     'mcp_config.json.template',
     'mcp_config.json.example'
 ]);
+const MCP_PREFIXED_SAMPLE_CONFIG_FILENAMES = new Set([
+    'example_mcp_config.json',
+    'claude_mcp_config.json',
+    'cursor_mcp_config.json',
+    'vscode_mcp_config.json'
+]);
 const MCP_EXAMPLE_BASE_FILENAMES = ['.mcp.json', 'mcp_config.json'];
 const MCP_PLATFORM_EXAMPLE_QUALIFIERS = new Set([
     'darwin',
@@ -169,7 +175,9 @@ export function isMcpSampleConfigPath(relativePath) {
     }
     const fileName = segments.at(-1);
     return fileName
-        ? MCP_SAMPLE_CONFIG_FILENAMES.has(fileName) || isPlatformSuffixedMcpExampleFileName(fileName)
+        ? MCP_SAMPLE_CONFIG_FILENAMES.has(fileName)
+            || MCP_PREFIXED_SAMPLE_CONFIG_FILENAMES.has(fileName)
+            || isPlatformSuffixedMcpExampleFileName(fileName)
         : false;
 }
 function isPlatformSuffixedMcpExampleFileName(fileName) {
