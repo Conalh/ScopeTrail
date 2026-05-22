@@ -1,5 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { configPath, isRecord, lineOfJsonKey, lineOfJsonStringValue, readJsonObjectWithSource } from '../discovery.js';
+import { isPipeToShellCommand, isUnpinnedCommand, serverCommand } from '../mcp-risk.js';
 const MCP_CONFIGS = [
     { path: '.mcp.json', serverKeys: ['mcpServers'] },
     { path: '.cursor/mcp.json', serverKeys: ['mcpServers', 'servers'] },
@@ -232,35 +233,8 @@ function readServerMap(json, serverKeys) {
     }
     return undefined;
 }
-function serverCommand(server) {
-    return [server.command, ...(server.args ?? []), server.url, server.serverUrl].filter(Boolean).join(' ');
-}
-function isUnpinnedCommand(server) {
-    const command = serverCommand(server);
-    const normalized = command.toLowerCase();
-    if (normalized.includes('@latest')) {
-        return true;
-    }
-    if (/https:\/\/github\.com\/[^ ]+/.test(normalized)) {
-        return true;
-    }
-    if (/\bcurl\b.+\|\s*(bash|sh)\b/.test(normalized)) {
-        return true;
-    }
-    if (/\b(iwr|invoke-webrequest)\b.+\|\s*(iex|invoke-expression)\b/.test(normalized)) {
-        return true;
-    }
-    const packageLikeArgs = server.args ?? [];
-    return ['npx', 'uvx', 'pipx'].includes((server.command ?? '').toLowerCase())
-        && packageLikeArgs.some((arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
-}
 function severityForSampleCommandRisk(server) {
     return isPipeToShellCommand(server) ? 'high' : 'medium';
-}
-function isPipeToShellCommand(server) {
-    const normalized = serverCommand(server).toLowerCase();
-    return /\bcurl\b.+\|\s*(bash|sh)\b/.test(normalized)
-        || /\b(iwr|invoke-webrequest)\b.+\|\s*(iex|invoke-expression)\b/.test(normalized);
 }
 function looksLikePackageName(value) {
     return /^[a-z0-9@][a-z0-9._/@-]+$/i.test(value) && !value.startsWith('-');

@@ -8,7 +8,12 @@ import { dirname, join } from 'node:path';
 const exec = promisify(execFile);
 const testDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = join(testDir, '..');
-const npmCli = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+// On Windows, npm ships as npm.cmd. Node has deprecated spawning shell
+// scripts with shell:true (DEP0190), so route through cmd.exe directly
+// rather than asking execFile to find the .cmd via the shell.
+const npmInvocation = process.platform === 'win32'
+  ? { command: 'cmd.exe', extraArgs: ['/c', 'npm'] }
+  : { command: 'npm', extraArgs: [] };
 
 // npm pack honors the `files` whitelist in package.json. ScopeTrail
 // is a trust-focused CLI that previously shipped fixtures with
@@ -17,10 +22,11 @@ const npmCli = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 // drift the tool is supposed to flag. This test pins the publish
 // surface so those files cannot leak back in.
 test('npm publish surface only ships runtime files', async () => {
-  const { stdout } = await exec(npmCli, ['pack', '--dry-run', '--json'], {
-    cwd: packageRoot,
-    shell: process.platform === 'win32'
-  });
+  const { stdout } = await exec(
+    npmInvocation.command,
+    [...npmInvocation.extraArgs, 'pack', '--dry-run', '--json'],
+    { cwd: packageRoot }
+  );
   const result = JSON.parse(stdout);
   const files = new Set(result[0].files.map((entry) => entry.path));
 

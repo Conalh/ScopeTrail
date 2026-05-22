@@ -1,4 +1,6 @@
 node_modules/
 
-# Local codex working state — not for tracking
-.codex/
+# Local codex working state — not for tracking. The detector fixtures
+# under test/fixtures/**/.codex/ are deliberately included; only the
+# top-level dogfood .codex/ is ignored.
+/.codex/
