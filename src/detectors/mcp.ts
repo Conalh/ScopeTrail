@@ -353,8 +353,23 @@ function lineForUnpinnedCommand(server: McpServerModel): number | undefined {
     return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url, server.serverUrl]);
   }
 
-  if (['npx', 'uvx', 'pipx'].includes((server.command ?? '').toLowerCase())) {
+  const cmd = (server.command ?? '').toLowerCase();
+  // Direct runners: the package name lives in args[0..]. `bunx` was
+  // added to `isUnpinnedCommand` in fb56768 but not to the line
+  // locator — bunx findings fell back to the server declaration's
+  // line instead of pointing at the package.
+  if (['npx', 'uvx', 'pipx', 'bunx'].includes(cmd)) {
     return firstLineForValues(server, server.args ?? [], (arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
+  }
+  // Wrapper runners: args[0] is the executor subcommand (`exec`,
+  // `dlx`, `x`). Skip it before locating — `exec` and `dlx` both
+  // pass `looksLikePackageName`, so a naive scan would mis-locate
+  // to the subcommand line instead of the package.
+  if (['npm', 'yarn', 'pnpm'].includes(cmd)) {
+    const args = server.args ?? [];
+    if (args.length > 1 && isWrapperSubcommand(cmd, args[0])) {
+      return firstLineForValues(server, args.slice(1), (arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
+    }
   }
 
   if (/https:\/\/github\.com\/[^ ]+/.test(normalized)) {
@@ -368,6 +383,14 @@ function lineForUnpinnedCommand(server: McpServerModel): number | undefined {
 
 function lineForRemoteEndpoint(server: McpServerModel): number | undefined {
   return firstLineForValues(server, [server.url, server.serverUrl], isRemoteEndpoint);
+}
+
+function isWrapperSubcommand(cmd: string, arg: string): boolean {
+  const sub = arg.toLowerCase();
+  if (cmd === 'npm') return sub === 'exec' || sub === 'x';
+  if (cmd === 'yarn') return sub === 'dlx';
+  if (cmd === 'pnpm') return sub === 'dlx' || sub === 'exec' || sub === 'x';
+  return false;
 }
 
 

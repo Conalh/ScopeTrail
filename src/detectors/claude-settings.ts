@@ -240,7 +240,17 @@ function isBroadMcpGrant(normalized: string): boolean {
 
 function severityForAllow(permission: string): Severity {
   const normalized = permission.toLowerCase();
-  if (normalized.includes('bash(') || normalized.includes('write(') || normalized.includes('edit(')) {
+  // Match bare verbs (`Bash`, `Write`, `Edit`) and parenthesized
+  // scoped grants (`Bash(npm *)`, `Write(./foo)`, `Edit(...)`)
+  // uniformly. The previous `includes('bash(')` check required the
+  // opening paren, so bare `"Bash"` — which `isBroadAllow` now
+  // correctly flags as broad — silently fell to `medium` severity
+  // despite granting unlimited shell execution.
+  //
+  // `read` stays medium even when bare/wildcard — read access is
+  // less destructive than execute/modify. Bare `Read` still surfaces
+  // as a finding via `isBroadAllow`, just at medium severity.
+  if (/\b(bash|write|edit)\b/.test(normalized)) {
     return 'high';
   }
 

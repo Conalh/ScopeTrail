@@ -68,6 +68,28 @@ test('isBroadAllow: bare Bash/Read/Write/Edit ARE broad (regression for security
   assert.equal(isBroadAllow('Edit'), true);
 });
 
+test('Claude detector: bare Bash/Write/Edit get high severity (not medium)', async () => {
+  // Pre-fix gap: `severityForAllow` required the opening paren
+  // (`bash(`, `write(`, `edit(`) to assign `high`, so bare `"Bash"`
+  // — which grants unlimited shell execution — silently dropped to
+  // `medium`. Bare `Read` deliberately stays medium because read
+  // access is less destructive than execute/modify.
+  const dir = await makeClaudeFixture(
+    { permissions: { allow: [], deny: [] }, hooks: {} },
+    { permissions: { allow: ['Bash', 'Write', 'Edit', 'Read'], deny: [] }, hooks: {} }
+  );
+  try {
+    const findings = await detectClaudeSettingsDrift(dir.oldRoot, dir.newRoot);
+    const bySubject = Object.fromEntries(findings.map((f) => [f.subject, f]));
+    assert.equal(bySubject['Bash'].severity, 'high', 'bare Bash should be high');
+    assert.equal(bySubject['Write'].severity, 'high', 'bare Write should be high');
+    assert.equal(bySubject['Edit'].severity, 'high', 'bare Edit should be high');
+    assert.equal(bySubject['Read'].severity, 'medium', 'bare Read stays medium by design');
+  } finally {
+    await rm(dir.root, { recursive: true, force: true });
+  }
+});
+
 test('isBroadAllow: narrowly-scoped Bash/Read/Write/Edit stay narrow', () => {
   // The bare-verb fix must not over-fire on legitimate narrow scopes.
   assert.equal(isBroadAllow('Bash(npm test)'), false);
