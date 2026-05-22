@@ -19,3 +19,10 @@ test('repository has public CI for build and tests', async () => {
   assert.match(workflow, /npm run build/);
   assert.match(workflow, /npm test/);
 });
+
+test('CI verifies committed Action runtime is current after build', async () => {
+  const workflow = await readFile(join(packageRoot, '.github', 'workflows', 'ci.yml'), 'utf8');
+
+  assert.match(workflow, /git diff --exit-code -- dist/);
+  assert.match(workflow, /git status --short -- dist/);
+});

@@ -24,4 +24,9 @@ jobs:
 
       - run: npm run build
 
+      - name: Verify committed Action runtime
+        run: |
+          git diff --exit-code -- dist
+          test -z "$(git status --short -- dist)"
+
       - run: npm test
