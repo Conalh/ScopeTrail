@@ -25,12 +25,12 @@ test('CLI emits JSON permission drift report', async () => {
   assert.deepEqual(
     report.findings.map((finding) => finding.kind),
     [
-      'mcp_server_added',
-      'unpinned_mcp_command',
-      'permission_allow_widened',
-      'permission_allow_widened',
-      'permission_deny_removed',
-      'hook_removed'
+      'scope_trail.mcp_server_added',
+      'scope_trail.unpinned_mcp_command',
+      'scope_trail.permission_allow_widened',
+      'scope_trail.permission_allow_widened',
+      'scope_trail.permission_deny_removed',
+      'scope_trail.hook_removed'
     ]
   );
 });

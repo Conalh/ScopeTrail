@@ -15,10 +15,10 @@ test('detects Claude settings permission drift', async () => {
   assert.deepEqual(
     findings.map((finding) => finding.kind),
     [
-      'permission_allow_widened',
-      'permission_allow_widened',
-      'permission_deny_removed',
-      'hook_removed'
+      'scope_trail.permission_allow_widened',
+      'scope_trail.permission_allow_widened',
+      'scope_trail.permission_deny_removed',
+      'scope_trail.hook_removed'
     ]
   );
   assert.equal(findings[0].subject, 'Bash(npm *)');

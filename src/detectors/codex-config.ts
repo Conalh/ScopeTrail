@@ -20,7 +20,7 @@ export async function detectCodexConfigDrift(oldRoot: string, newRoot: string): 
     const newEntry = newConfig.get(key);
     if (newEntry && sandboxRank(newEntry.value) > sandboxRank(oldEntry?.value)) {
       findings.push({
-        kind: 'codex_sandbox_widened',
+        kind: 'scope_trail.codex_sandbox_widened',
         severity: sandboxRank(newEntry.value) >= 3 ? 'critical' : 'high',
         file: CODEX_CONFIG_FILE,
         line: newEntry.line,
@@ -35,7 +35,7 @@ export async function detectCodexConfigDrift(oldRoot: string, newRoot: string): 
   const newApproval = newConfig.get('approval_policy');
   if (newApproval && approvalRank(newApproval.value) > approvalRank(oldApproval?.value)) {
     findings.push({
-      kind: 'codex_approval_weakened',
+      kind: 'scope_trail.codex_approval_weakened',
       severity: newApproval.value === 'never' ? 'high' : 'medium',
       file: CODEX_CONFIG_FILE,
       line: newApproval.line,
@@ -50,7 +50,7 @@ export async function detectCodexConfigDrift(oldRoot: string, newRoot: string): 
     const newEntry = newConfig.get(key);
     if (newEntry?.value === 'true' && oldEntry?.value !== 'true') {
       findings.push({
-        kind: 'codex_network_enabled',
+        kind: 'scope_trail.codex_network_enabled',
         severity: 'medium',
         file: CODEX_CONFIG_FILE,
         line: newEntry.line,
@@ -65,7 +65,7 @@ export async function detectCodexConfigDrift(oldRoot: string, newRoot: string): 
   const newTrust = newConfig.get('projects.trust_level');
   if (newTrust?.value === 'trusted' && oldTrust?.value !== 'trusted') {
     findings.push({
-      kind: 'codex_project_trusted',
+      kind: 'scope_trail.codex_project_trusted',
       severity: 'high',
       file: CODEX_CONFIG_FILE,
       line: newTrust.line,
