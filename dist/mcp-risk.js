@@ -30,34 +30,58 @@ export function isUnpinnedCommand(spec) {
             (cmd === 'pnpm' && (sub === 'dlx' || sub === 'exec' || sub === 'x'));
         if (isExecutor) {
             const packageArgs = packageLikeArgs.slice(1).filter((arg) => !arg.startsWith('-'));
-            if (packageArgs.length > 0) {
-                const pkg = packageArgs[0];
-                if (looksLikePackageName(pkg) && !hasExactVersion(pkg)) {
-                    return true;
-                }
+            if (packageArgs.length > 0 && isUnpinnedPackageSpec(packageArgs[0])) {
+                return true;
             }
         }
     }
     // `bunx` is Bun's npx equivalent and ships as its own binary, so it
     // surfaces as `command: "bunx"` in MCP configs.
     return ['npx', 'uvx', 'pipx', 'bunx'].includes(cmd)
-        && packageLikeArgs.some((arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
+        && packageLikeArgs.some(isUnpinnedPackageSpec);
 }
 export function isPipeToShellCommand(spec) {
     const normalized = serverCommand(spec).toLowerCase();
     return /\bcurl\b.+\|\s*(bash|sh)\b/.test(normalized)
         || /\b(iwr|invoke-webrequest)\b.+\|\s*(iex|invoke-expression)\b/.test(normalized);
 }
-function looksLikePackageName(value) {
-    return /^[a-z0-9@][a-z0-9._/@-]+$/i.test(value) && !value.startsWith('-');
-}
-function hasExactVersion(value) {
-    const packageVersion = value.startsWith('@') ? value.indexOf('@', 1) : value.indexOf('@');
-    if (packageVersion === -1) {
+// A package spec covers `name`, `name@<version-or-range>`, and the
+// occasional `name>=1.2.3` form. Only `name@<exact N.N.N>` is pinned;
+// anything else (bare name, `@latest`, `^`, `~`, `>=`, `*`) is unpinned.
+// The previous narrow `looksLikePackageName` regex rejected any value
+// containing range operators, so `@vendor/helper@^1.2.3` slipped past
+// the unpinned check entirely.
+function isUnpinnedPackageSpec(value) {
+    const spec = parsePackageSpec(value);
+    if (!spec) {
         return false;
     }
-    const version = value.slice(packageVersion + 1);
-    return /^\d+\.\d+\.\d+/.test(version);
+    if (spec.versionSpec === undefined) {
+        return true;
+    }
+    return !/^@\d+\.\d+\.\d+/.test(spec.versionSpec);
+}
+function parsePackageSpec(value) {
+    if (!value || value.startsWith('-')) {
+        return undefined;
+    }
+    // For scoped names (`@scope/name`), skip the leading `@` so we don't
+    // mistake it for the version separator.
+    const scanFrom = value.startsWith('@') ? 1 : 0;
+    let cut = -1;
+    for (let index = scanFrom; index < value.length; index += 1) {
+        const char = value[index];
+        if (char === '@' || char === '>' || char === '<' || char === '=') {
+            cut = index;
+            break;
+        }
+    }
+    const name = cut === -1 ? value : value.slice(0, cut);
+    const versionSpec = cut === -1 ? undefined : value.slice(cut);
+    if (!/^@?[a-z0-9][a-z0-9._/-]*$/i.test(name)) {
+        return undefined;
+    }
+    return { name, versionSpec };
 }
 export function remoteEndpoint(spec) {
     return [spec.url, spec.serverUrl].find((value) => Boolean(value && isRemoteEndpoint(value)));

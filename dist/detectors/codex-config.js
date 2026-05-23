@@ -34,7 +34,7 @@ export async function detectCodexConfigDrift(oldRoot, newRoot) {
                 kind: 'scope_trail.codex_sandbox_widened',
                 severity: sandboxRank(newEntry.value) >= 3 ? 'critical' : 'high',
                 file: CODEX_CONFIG_FILE,
-                line: newEntry.line,
+                line: newEntry.line || undefined,
                 subject: key,
                 message: `Codex sandbox setting was widened to ${newEntry.value}.`,
                 recommendation: 'Keep Codex sandbox settings as narrow as the workflow allows and review full-access/elevated changes carefully.'
@@ -48,7 +48,7 @@ export async function detectCodexConfigDrift(oldRoot, newRoot) {
             kind: 'scope_trail.codex_approval_weakened',
             severity: newApproval.value === 'never' ? 'high' : 'medium',
             file: CODEX_CONFIG_FILE,
-            line: newApproval.line,
+            line: newApproval.line || undefined,
             subject: 'approval_policy',
             message: `Codex approval policy was weakened to ${newApproval.value}.`,
             recommendation: 'Require human approval for risky commands unless the repository has a reviewed reason to run without prompts.'
@@ -62,7 +62,7 @@ export async function detectCodexConfigDrift(oldRoot, newRoot) {
                 kind: 'scope_trail.codex_network_enabled',
                 severity: 'medium',
                 file: CODEX_CONFIG_FILE,
-                line: newEntry.line,
+                line: newEntry.line || undefined,
                 subject: key,
                 message: `Codex network access was enabled for ${key}.`,
                 recommendation: 'Confirm network access is needed and that commands cannot exfiltrate secrets or fetch unreviewed code.'
@@ -267,61 +267,66 @@ function isPlainObject(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 async function readCodexConfig(root) {
-    let text = '';
+    const text = await readCodexText(root);
+    if (!text) {
+        return new Map();
+    }
+    // Use the same parsed-TOML walk as readTrustedProjects so inline
+    // tables — `sandbox_workspace_write = { network_access = true }` and
+    // `windows = { sandbox = "danger-full-access" }` — surface their leaf
+    // keys. The previous line-regex parser stopped at `{` and silently
+    // returned rating: "none" for valid TOML that widened the sandbox.
+    let parsed;
     try {
-        text = await readFile(configPath(root, CODEX_CONFIG_FILE), 'utf8');
+        parsed = parseToml(text);
     }
-    catch (error) {
-        if (isNodeError(error) && error.code === 'ENOENT') {
-            return new Map();
-        }
-        throw error;
+    catch {
+        // detectCodexConfigDrift already short-circuits on parse errors via
+        // readCodexParseError; reaching here with bad TOML shouldn't happen,
+        // and an empty map is the right fallback if it does.
+        return new Map();
     }
-    return parseTomlEntries(text);
-}
-function parseTomlEntries(text) {
     const entries = new Map();
-    let section = '';
-    const lines = text.split(/\r?\n/);
-    for (let index = 0; index < lines.length; index += 1) {
-        const line = lines[index];
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) {
-            continue;
-        }
-        const sectionMatch = /^\[([^\]]+)\]$/.exec(trimmed);
-        if (sectionMatch) {
-            section = normalizeSection(sectionMatch[1]);
-            continue;
-        }
-        const keyMatch = /^([A-Za-z0-9_.-]+)\s*=\s*(.+)$/.exec(trimmed);
-        if (!keyMatch) {
-            continue;
-        }
-        const key = normalizeKey(section, keyMatch[1]);
-        const value = parseScalarValue(keyMatch[2]);
-        if (value !== undefined) {
-            entries.set(key, { line: index + 1, value });
-        }
-    }
+    collectTomlEntries(parsed, '', text, entries);
     return entries;
 }
-function normalizeSection(section) {
-    const normalized = section.trim().toLowerCase();
-    return normalized.startsWith('projects.') ? 'projects' : normalized;
-}
-function normalizeKey(section, key) {
-    const normalizedKey = key.trim().toLowerCase();
-    return section ? `${section}.${normalizedKey}` : normalizedKey;
-}
-function parseScalarValue(rawValue) {
-    const trimmed = rawValue.trim();
-    const stringMatch = /^"([^"]*)"/.exec(trimmed) ?? /^'([^']*)'/.exec(trimmed);
-    if (stringMatch) {
-        return stringMatch[1].toLowerCase();
+function collectTomlEntries(node, prefix, text, out) {
+    for (const [rawKey, value] of Object.entries(node)) {
+        const key = rawKey.toLowerCase();
+        const dotted = prefix ? `${prefix}.${key}` : key;
+        if (isPlainObject(value)) {
+            collectTomlEntries(value, dotted, text, out);
+            continue;
+        }
+        out.set(dotted, {
+            line: locateTomlLine(text, dotted),
+            value: stringifyScalar(value)
+        });
     }
-    const bareMatch = /^(true|false|[A-Za-z0-9_.-]+)/.exec(trimmed);
-    return bareMatch?.[1].toLowerCase();
+}
+function locateTomlLine(text, dottedKey) {
+    // Inline tables defeat dotted-key line locators (they collapse to
+    // line 0). Walk up the prefix so we still point at the assignment
+    // line rather than dropping the locator entirely.
+    let current = dottedKey;
+    while (current) {
+        const line = lineOfTomlKey(text, current);
+        if (line > 0) {
+            return line;
+        }
+        const lastDot = current.lastIndexOf('.');
+        if (lastDot === -1) {
+            return 0;
+        }
+        current = current.slice(0, lastDot);
+    }
+    return 0;
+}
+function stringifyScalar(value) {
+    if (typeof value === 'string') {
+        return value.toLowerCase();
+    }
+    return String(value).toLowerCase();
 }
 function sandboxRank(value) {
     if (!value) {

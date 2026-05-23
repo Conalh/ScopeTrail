@@ -247,6 +247,51 @@ test('isUnpinnedCommand flags npm exec / yarn dlx / pnpm dlx packages without ex
 });
 
 
+test('isUnpinnedCommand flags semver-range package specs (^, ~, >=, *)', async () => {
+  // Pre-fix gap: looksLikePackageName's char class accepted only
+  // [a-z0-9._/@-], so `@vendor/helper@^1.2.3`, `~1.2.3`, and the
+  // less-common `mcp-server>=1.2.3` form fell out of the package-shape
+  // check entirely — producing medium command-change findings instead
+  // of high unpinned findings.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-ranges-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(newDir, { recursive: true });
+    writeFileSync(join(oldDir, '.mcp.json'), JSON.stringify({ mcpServers: {} }));
+    writeFileSync(
+      join(newDir, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          'caret-range': { command: 'npx', args: ['-y', '@vendor/helper@^1.2.3'] },
+          'tilde-range': { command: 'npx', args: ['-y', '@vendor/helper@~1.2.3'] },
+          'gte-range':   { command: 'npx', args: ['-y', '@vendor/helper@>=1.2.3'] },
+          'star-range':  { command: 'npx', args: ['-y', '@vendor/helper@*'] },
+          'bare-name':   { command: 'npx', args: ['-y', '@vendor/helper'] },
+          'compare-form':{ command: 'npx', args: ['mcp-server>=1.2.3'] },
+          'exact-pin':   { command: 'npx', args: ['-y', '@vendor/helper@1.2.3'] }
+        }
+      })
+    );
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    const unpinned = findings.filter((f) => f.kind === 'scope_trail.unpinned_mcp_command');
+    const subjects = new Set(unpinned.map((f) => f.subject));
+
+    for (const name of ['caret-range', 'tilde-range', 'gte-range', 'star-range', 'bare-name', 'compare-form']) {
+      assert.ok(subjects.has(name), `expected unpinned finding for ${name}`);
+    }
+    assert.equal(subjects.has('exact-pin'), false, 'exact pin should not be flagged unpinned');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
 test('detects added MCP server with unpinned command', async () => {
   const oldDir = join(testDir, 'fixtures', 'mcp-drift', 'old');
   const newDir = join(testDir, 'fixtures', 'mcp-drift', 'new');

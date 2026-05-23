@@ -5,12 +5,19 @@ import { fileURLToPath } from 'node:url';
 import { detectClaudeSettingsDrift } from './detectors/claude-settings.js';
 import { detectCodexConfigDrift } from './detectors/codex-config.js';
 import { detectMcpDrift } from './detectors/mcp.js';
-import { materializeGitSnapshot } from './git-snapshot.js';
-import { createReport, renderReport, type ReportFormat } from './report.js';
+import { materializeGitSnapshot, ScopeTrailError } from './git-snapshot.js';
+import {
+  createReport,
+  isDriftRating,
+  meetsFailOnThreshold,
+  renderReport,
+  type DriftRating,
+  type ReportFormat
+} from './report.js';
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (argv.length === 0 || argv.includes('--help') || argv.includes('-h')) {
-    process.stdout.write('Usage: scopetrail diff --old <dir> --new <dir> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH]\n');
+    process.stdout.write(`${usage()}\n`);
     return 0;
   }
 
@@ -37,13 +44,21 @@ async function runDiff(argv: string[]): Promise<number> {
     oldRoot = parsed.oldRoot;
     newRoot = parsed.newRoot;
   } else {
-    const baseSnapshot = await materializeGitSnapshot(parsed.repo, parsed.base);
-    const headSnapshot = await materializeGitSnapshot(parsed.repo, parsed.head);
-    oldRoot = baseSnapshot.root;
-    newRoot = headSnapshot.root;
-    cleanup = async () => {
-      await Promise.all([baseSnapshot.cleanup(), headSnapshot.cleanup()]);
-    };
+    try {
+      const baseSnapshot = await materializeGitSnapshot(parsed.repo, parsed.base);
+      const headSnapshot = await materializeGitSnapshot(parsed.repo, parsed.head);
+      oldRoot = baseSnapshot.root;
+      newRoot = headSnapshot.root;
+      cleanup = async () => {
+        await Promise.all([baseSnapshot.cleanup(), headSnapshot.cleanup()]);
+      };
+    } catch (error) {
+      if (error instanceof ScopeTrailError) {
+        process.stderr.write(`${error.message}\n`);
+        return 2;
+      }
+      throw error;
+    }
   }
 
   try {
@@ -65,6 +80,12 @@ async function runDiff(argv: string[]): Promise<number> {
       await writeFile(parsed.outJson, renderReport(report, 'json'));
     }
     process.stdout.write(renderReport(report, parsed.format));
+    if (meetsFailOnThreshold(report.rating, parsed.failOn)) {
+      process.stderr.write(
+        `ScopeTrail rating ${report.rating} meets --fail-on threshold ${parsed.failOn}.\n`
+      );
+      return 1;
+    }
     return 0;
   } finally {
     await cleanup?.();
@@ -75,6 +96,7 @@ interface CommonDiffArgs {
   format: ReportFormat;
   outMarkdown?: string;
   outJson?: string;
+  failOn: DriftRating;
 }
 
 type ParsedDiffArgs =
@@ -91,6 +113,7 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
   let format: ReportFormat = 'text';
   let outMarkdown: string | undefined;
   let outJson: string | undefined;
+  let failOn: DriftRating = 'none';
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -129,6 +152,12 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
       }
       outJson = value;
       index += 1;
+    } else if (arg === '--fail-on') {
+      if (!value || !isDriftRating(value)) {
+        return { ok: false, error: `Invalid --fail-on value: ${value ?? ''}. Use none, low, medium, high, or critical.` };
+      }
+      failOn = value;
+      index += 1;
     } else {
       return { ok: false, error: `Unknown argument: ${arg}` };
     }
@@ -150,7 +179,7 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
       return { ok: false, error: 'Missing required --head <ref> argument.' };
     }
 
-    return { ok: true, mode: 'git', repo, base, head, format, outMarkdown, outJson };
+    return { ok: true, mode: 'git', repo, base, head, format, outMarkdown, outJson, failOn };
   }
 
   if (!oldRoot) {
@@ -161,7 +190,7 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
     return { ok: false, error: 'Missing required --new <dir> argument.' };
   }
 
-  return { ok: true, mode: 'directories', oldRoot, newRoot, format, outMarkdown, outJson };
+  return { ok: true, mode: 'directories', oldRoot, newRoot, format, outMarkdown, outJson, failOn };
 }
 
 function isReportFormat(value: string | undefined): value is ReportFormat {
@@ -177,7 +206,7 @@ if (invokedPath) {
 function usage(): string {
   return [
     'Usage:',
-    '  scopetrail diff --old <dir> --new <dir> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH]',
-    '  scopetrail diff --repo <repo> --base <ref> --head <ref> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH]'
+    '  scopetrail diff --old <dir> --new <dir> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH] [--fail-on none|low|medium|high|critical]',
+    '  scopetrail diff --repo <repo> --base <ref> --head <ref> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH] [--fail-on none|low|medium|high|critical]'
   ].join('\n');
 }

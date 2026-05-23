@@ -45,11 +45,8 @@ export function isUnpinnedCommand(spec: McpCommandShape): boolean {
                        (cmd === 'pnpm' && (sub === 'dlx' || sub === 'exec' || sub === 'x'));
     if (isExecutor) {
       const packageArgs = packageLikeArgs.slice(1).filter((arg) => !arg.startsWith('-'));
-      if (packageArgs.length > 0) {
-        const pkg = packageArgs[0];
-        if (looksLikePackageName(pkg) && !hasExactVersion(pkg)) {
-          return true;
-        }
+      if (packageArgs.length > 0 && isUnpinnedPackageSpec(packageArgs[0])) {
+        return true;
       }
     }
   }
@@ -57,7 +54,7 @@ export function isUnpinnedCommand(spec: McpCommandShape): boolean {
   // `bunx` is Bun's npx equivalent and ships as its own binary, so it
   // surfaces as `command: "bunx"` in MCP configs.
   return ['npx', 'uvx', 'pipx', 'bunx'].includes(cmd)
-    && packageLikeArgs.some((arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
+    && packageLikeArgs.some(isUnpinnedPackageSpec);
 }
 
 export function isPipeToShellCommand(spec: McpCommandShape): boolean {
@@ -66,18 +63,47 @@ export function isPipeToShellCommand(spec: McpCommandShape): boolean {
     || /\b(iwr|invoke-webrequest)\b.+\|\s*(iex|invoke-expression)\b/.test(normalized);
 }
 
-function looksLikePackageName(value: string): boolean {
-  return /^[a-z0-9@][a-z0-9._/@-]+$/i.test(value) && !value.startsWith('-');
-}
-
-function hasExactVersion(value: string): boolean {
-  const packageVersion = value.startsWith('@') ? value.indexOf('@', 1) : value.indexOf('@');
-  if (packageVersion === -1) {
+// A package spec covers `name`, `name@<version-or-range>`, and the
+// occasional `name>=1.2.3` form. Only `name@<exact N.N.N>` is pinned;
+// anything else (bare name, `@latest`, `^`, `~`, `>=`, `*`) is unpinned.
+// The previous narrow `looksLikePackageName` regex rejected any value
+// containing range operators, so `@vendor/helper@^1.2.3` slipped past
+// the unpinned check entirely.
+function isUnpinnedPackageSpec(value: string): boolean {
+  const spec = parsePackageSpec(value);
+  if (!spec) {
     return false;
   }
+  if (spec.versionSpec === undefined) {
+    return true;
+  }
+  return !/^@\d+\.\d+\.\d+/.test(spec.versionSpec);
+}
 
-  const version = value.slice(packageVersion + 1);
-  return /^\d+\.\d+\.\d+/.test(version);
+function parsePackageSpec(value: string): { name: string; versionSpec?: string } | undefined {
+  if (!value || value.startsWith('-')) {
+    return undefined;
+  }
+
+  // For scoped names (`@scope/name`), skip the leading `@` so we don't
+  // mistake it for the version separator.
+  const scanFrom = value.startsWith('@') ? 1 : 0;
+  let cut = -1;
+  for (let index = scanFrom; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === '@' || char === '>' || char === '<' || char === '=') {
+      cut = index;
+      break;
+    }
+  }
+
+  const name = cut === -1 ? value : value.slice(0, cut);
+  const versionSpec = cut === -1 ? undefined : value.slice(cut);
+
+  if (!/^@?[a-z0-9][a-z0-9._/-]*$/i.test(name)) {
+    return undefined;
+  }
+  return { name, versionSpec };
 }
 
 export function remoteEndpoint(spec: McpCommandShape): string | undefined {

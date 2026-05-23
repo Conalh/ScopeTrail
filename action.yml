@@ -67,48 +67,37 @@ runs:
 
         # Single scan: stdout streams GitHub annotations so the runner
         # picks up ::warning lines, while --out-markdown and --out-json
-        # capture the other two renderings from the same run. Previously
-        # this ran the CLI three times (markdown/json/github), repeating
-        # both git snapshot materialization and full detector work.
+        # capture the other two renderings from the same run. The CLI
+        # itself enforces --fail-on (exit 1) so we don't reimplement
+        # the rank table in bash. Capture the CLI status without
+        # `set -e` halting before outputs are written.
+        set +e
         node "$GITHUB_ACTION_PATH/dist/index.js" diff \
           --repo "$repo" --base "$base" --head "$head" \
           --format github \
           --out-markdown "$report_file" \
-          --out-json "$json_file"
+          --out-json "$json_file" \
+          --fail-on "$fail_on"
+        cli_status=$?
+        set -e
 
         # Surface the markdown report in the Action log for parity
         # with the prior `tee` of `--format markdown`.
-        cat "$report_file"
-
-        if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-          cat "$report_file" >> "$GITHUB_STEP_SUMMARY"
+        if [ -f "$report_file" ]; then
+          cat "$report_file"
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            cat "$report_file" >> "$GITHUB_STEP_SUMMARY"
+          fi
         fi
 
-        rating="$(node -e "const fs = require('node:fs'); console.log(JSON.parse(fs.readFileSync(process.argv[1], 'utf8')).rating)" "$json_file")"
-        finding_count="$(node -e "const fs = require('node:fs'); console.log(JSON.parse(fs.readFileSync(process.argv[1], 'utf8')).findingCount)" "$json_file")"
-        echo "rating=$rating" >> "$GITHUB_OUTPUT"
-        echo "finding-count=$finding_count" >> "$GITHUB_OUTPUT"
-
-        rank() {
-          case "$1" in
-            none) echo 0 ;;
-            low) echo 1 ;;
-            medium) echo 2 ;;
-            high) echo 3 ;;
-            critical) echo 4 ;;
-            *) echo -1 ;;
-          esac
-        }
-
-        fail_rank="$(rank "$fail_on")"
-        rating_rank="$(rank "$rating")"
-
-        if [ "$fail_rank" -lt 0 ]; then
-          echo "::error::Invalid fail-on value '$fail_on'. Use none, low, medium, high, or critical."
-          exit 2
+        if [ -f "$json_file" ]; then
+          rating="$(node -e "const fs = require('node:fs'); console.log(JSON.parse(fs.readFileSync(process.argv[1], 'utf8')).rating)" "$json_file")"
+          finding_count="$(node -e "const fs = require('node:fs'); console.log(JSON.parse(fs.readFileSync(process.argv[1], 'utf8')).findingCount)" "$json_file")"
+          echo "rating=$rating" >> "$GITHUB_OUTPUT"
+          echo "finding-count=$finding_count" >> "$GITHUB_OUTPUT"
         fi
 
-        if [ "$fail_rank" -gt 0 ] && [ "$rating_rank" -ge "$fail_rank" ]; then
-          echo "::error::ScopeTrail permission drift rating $rating meets fail-on threshold $fail_on."
-          exit 1
+        if [ "$cli_status" -eq 1 ]; then
+          echo "::error::ScopeTrail permission drift rating ${rating:-unknown} meets fail-on threshold $fail_on."
         fi
+        exit "$cli_status"

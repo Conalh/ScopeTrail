@@ -55,7 +55,23 @@ async function snapshotPathsForRef(repo, ref) {
     return [...paths].sort();
 }
 async function verifyGitRef(repo, ref) {
-    await execFileAsync('git', ['-C', repo, 'rev-parse', '--verify', `${ref}^{commit}`]);
+    try {
+        await execFileAsync('git', ['-C', repo, 'rev-parse', '--verify', `${ref}^{commit}`]);
+    }
+    catch (error) {
+        // Without wrapping, the raw `execFile` rejection escapes as a Node
+        // stack trace mentioning `git rev-parse --verify`. The most common
+        // CI cause is a shallow checkout (`fetch-depth: 1`) that doesn't
+        // include the PR base ref, so surface that hint up front.
+        throw new ScopeTrailError(`Could not resolve git ref "${ref}" in ${repo}. ` +
+            'If this is a CI run, ensure actions/checkout uses fetch-depth: 0 so the PR base and head are both available locally.', { cause: error });
+    }
+}
+export class ScopeTrailError extends Error {
+    constructor(message, options) {
+        super(message, options);
+        this.name = 'ScopeTrailError';
+    }
 }
 async function listPathsAtRef(repo, ref) {
     const { stdout } = await execFileAsync('git', ['-C', repo, 'ls-tree', '-r', '--name-only', ref], {
