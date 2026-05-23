@@ -12,12 +12,18 @@ permissions:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # agent-gov-core@>=0.7 requires Node >=20; test the supported
+        # range so package consumers aren't surprised on LTS Node 20/22.
+        node-version: [20, 22, 24]
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: ${{ matrix.node-version }}
           cache: npm
 
       - run: npm ci

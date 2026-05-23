@@ -14,8 +14,7 @@ test('codex_config_syntax_error: malformed TOML surfaces a finding instead of re
   const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
 
-  const root = mkdtempSync(join(testDir, '..', 'node_modules', '.scopetrail-codex-malformed-')
-    .replaceAll('\\', '/'));
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-codex-malformed-'));
   try {
     const oldDir = join(root, 'old');
     const newDir = join(root, 'new');
@@ -47,8 +46,7 @@ test('codex_project_trusted: each [projects.<path>] is tracked independently', a
   const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
 
-  const root = mkdtempSync(join(testDir, '..', 'node_modules', '.scopetrail-codex-projects-')
-    .replaceAll('\\', '/'));
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-codex-projects-'));
   try {
     const oldDir = join(root, 'old');
     const newDir = join(root, 'new');
@@ -75,6 +73,54 @@ test('codex_project_trusted: each [projects.<path>] is tracked independently', a
       'projects./home/dev/beta.trust_level',
       'projects./home/dev/gamma.trust_level'
     ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('inline-table sandbox/network keys are detected (parsed TOML, not regex)', async () => {
+  // Pre-fix gap: parseTomlEntries used a line-regex that bailed on
+  // values starting with `{`, so `sandbox_workspace_write = { network_access = true }`
+  // and `windows = { sandbox = "danger-full-access" }` returned
+  // rating: "none" / findingCount: 0 even though they're valid TOML
+  // that widens the Codex sandbox or enables network access.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-codex-inline-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(join(oldDir, '.codex'), { recursive: true });
+    mkdirSync(join(newDir, '.codex'), { recursive: true });
+    writeFileSync(
+      join(oldDir, '.codex', 'config.toml'),
+      'sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n'
+    );
+    writeFileSync(
+      join(newDir, '.codex', 'config.toml'),
+      'sandbox_workspace_write = { network_access = true }\n' +
+      'windows = { sandbox = "danger-full-access" }\n' +
+      'approval_policy = "never"\n'
+    );
+
+    const findings = await detectCodexConfigDrift(oldDir, newDir);
+    const byKind = (kind) => findings.filter((f) => f.kind === kind);
+
+    const sandboxFindings = byKind('scope_trail.codex_sandbox_widened');
+    assert.ok(
+      sandboxFindings.some((f) => f.subject === 'windows.sandbox'),
+      'expected windows.sandbox inline-table widening to be detected'
+    );
+
+    const networkFindings = byKind('scope_trail.codex_network_enabled');
+    assert.ok(
+      networkFindings.some((f) => f.subject === 'sandbox_workspace_write.network_access'),
+      'expected inline-table sandbox_workspace_write.network_access to be detected'
+    );
+
+    const approvalFindings = byKind('scope_trail.codex_approval_weakened');
+    assert.equal(approvalFindings.length, 1, 'approval_policy regression check');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

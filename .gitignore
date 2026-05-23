@@ -1,6 +1,10 @@
 node_modules/
 
-# Local codex working state — not for tracking. The detector fixtures
-# under test/fixtures/**/.codex/ are deliberately included; only the
-# top-level dogfood .codex/ is ignored.
+# Local agent working state — not for tracking. The historical demo PR
+# (#3) intentionally introduced these at the repo root with risky
+# settings; they were merged into main and then needed cleanup. Ignore
+# them at the root going forward so a passing scan can't silently
+# regress. Detector fixtures under test/fixtures/**/ stay tracked.
 /.codex/
+/.claude/
+/.mcp.json

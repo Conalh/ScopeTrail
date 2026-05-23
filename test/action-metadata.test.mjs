@@ -24,6 +24,10 @@ test('GitHub Action metadata exposes PR drift inputs', async () => {
   assert.match(action, /--format github/);
   assert.match(action, /--out-markdown/);
   assert.match(action, /--out-json/);
+  // Threshold logic lives in the CLI, not bash — see src/report.ts's
+  // meetsFailOnThreshold. The action forwards the fail-on input.
+  assert.match(action, /--fail-on "?\$\{?fail_on/);
+  assert.doesNotMatch(action, /rank\(\)\s*\{/);
 });
 
 test('GitHub Action invokes the ScopeTrail CLI once per run', async () => {

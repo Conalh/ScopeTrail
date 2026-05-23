@@ -174,6 +174,39 @@ test('CLI git diff snapshots platform-suffixed MCP example paths', async () => {
   }
 });
 
+test('CLI surfaces a friendly error when a git ref cannot be resolved', async () => {
+  // Pre-fix gap: rev-parse failures escaped as a raw Node child_process
+  // stack trace. The most common cause in CI is a shallow checkout that
+  // doesn't include the PR base ref, so the message now mentions
+  // fetch-depth: 0 explicitly.
+  const fx = await makeGitRepo({
+    prefix: 'scopetrail-git-bad-ref-',
+    initialFiles: { 'README.md': 'base\n' },
+    initialMessage: 'base',
+  });
+  try {
+    let stderr = '';
+    let exitCode = 0;
+    try {
+      await execFileAsync(
+        process.execPath,
+        ['dist/index.js', 'diff', '--repo', fx.repo, '--base', 'does-not-exist', '--head', 'HEAD', '--format', 'json'],
+        { cwd: packageRoot }
+      );
+    } catch (error) {
+      stderr = error.stderr ?? '';
+      exitCode = error.code ?? 0;
+    }
+
+    assert.equal(exitCode, 2, 'expected exit code 2 for unresolvable ref');
+    assert.match(stderr, /does-not-exist/, 'error should name the ref');
+    assert.match(stderr, /fetch-depth: 0/, 'error should hint at fetch-depth: 0');
+    assert.doesNotMatch(stderr, /\bat \w+ \(/, 'error should not leak a Node stack trace');
+  } finally {
+    await fx.cleanup();
+  }
+});
+
 test('CLI git diff snapshots prefixed MCP config example paths', async () => {
   const fx = await makeGitRepo({
     prefix: 'scopetrail-git-prefixed-sample-',

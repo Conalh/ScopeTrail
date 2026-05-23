@@ -70,3 +70,19 @@ test('npm publish surface only ships runtime files', async () => {
     );
   }
 });
+
+test('git tree does not carry live risky agent configs at the repo root', async () => {
+  // The demo PR (#3) for this project intentionally added .mcp.json,
+  // .claude/settings.json, and .codex/config.toml at the repo root.
+  // It was merged into main and shipped on v0.1.6+ as tracked files —
+  // meaning anyone running Claude Code, Codex, or a permission scanner
+  // against this checkout loaded a live `stripe-admin` MCP server and
+  // broad `Bash(npm *)` / `Read(~/**)` Claude allow rules. The demo is
+  // archived on PR #3; the live files have been untracked and the
+  // .gitignore now keeps them from coming back.
+  const { stdout } = await exec('git', ['ls-files', '-z', '--full-name', '--', '.mcp.json', '.claude', '.codex'], {
+    cwd: packageRoot
+  });
+  const tracked = stdout.split('\0').filter(Boolean);
+  assert.deepEqual(tracked, [], `unexpected tracked demo configs at repo root: ${tracked.join(', ')}`);
+});

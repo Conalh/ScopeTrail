@@ -77,6 +77,55 @@ test('CLI emits GitHub warning annotations for permission drift findings', async
   assert.doesNotMatch(stdout, /::error/);
 });
 
+test('CLI --fail-on exits 1 when rating meets the threshold (and 0 below it)', async () => {
+  // Threshold logic used to live only in action.yml, so local/other-CI
+  // users had to grep the JSON report. The CLI now mirrors the Action.
+  const oldDir = join(testDir, 'fixtures', 'combined', 'old');
+  const newDir = join(testDir, 'fixtures', 'combined', 'new');
+
+  // Below threshold: rating "critical" with --fail-on critical+1 doesn't
+  // exist, so test the "above threshold" case at high.
+  let aboveStatus = 0;
+  try {
+    await execFileAsync(
+      process.execPath,
+      ['dist/index.js', 'diff', '--old', oldDir, '--new', newDir, '--format', 'json', '--fail-on', 'high'],
+      { cwd: packageRoot }
+    );
+  } catch (error) {
+    aboveStatus = error.code ?? 0;
+  }
+  assert.equal(aboveStatus, 1, 'rating critical >= threshold high should exit 1');
+
+  // Below: same diff, but --fail-on none should still exit 0.
+  const { stdout: belowStdout } = await execFileAsync(
+    process.execPath,
+    ['dist/index.js', 'diff', '--old', oldDir, '--new', newDir, '--format', 'json', '--fail-on', 'none'],
+    { cwd: packageRoot }
+  );
+  assert.equal(JSON.parse(belowStdout).rating, 'critical');
+});
+
+test('CLI --fail-on rejects unknown values with exit 2', async () => {
+  const oldDir = join(testDir, 'fixtures', 'combined', 'old');
+  const newDir = join(testDir, 'fixtures', 'combined', 'new');
+
+  let status = 0;
+  let stderr = '';
+  try {
+    await execFileAsync(
+      process.execPath,
+      ['dist/index.js', 'diff', '--old', oldDir, '--new', newDir, '--fail-on', 'severe'],
+      { cwd: packageRoot }
+    );
+  } catch (error) {
+    status = error.code ?? 0;
+    stderr = error.stderr ?? '';
+  }
+  assert.equal(status, 2);
+  assert.match(stderr, /Invalid --fail-on value/);
+});
+
 test('CLI renders markdown and JSON to files alongside stdout annotations in a single scan', async () => {
   // The GitHub Action used to invoke the CLI three times (one per
   // format), repeating snapshot materialization and detector work on

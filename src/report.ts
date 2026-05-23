@@ -17,6 +17,18 @@ const severityRank: Record<DriftRating, number> = {
   critical: 4
 };
 
+export function isDriftRating(value: string): value is DriftRating {
+  return value in severityRank;
+}
+
+// Returns true when `rating` is at least as severe as `threshold` and
+// `threshold` isn't `none`. Used by the CLI's --fail-on gate so non-
+// GitHub CI (local pre-push, GitLab, CircleCI) can share the same
+// threshold semantics as the Action.
+export function meetsFailOnThreshold(rating: DriftRating, threshold: DriftRating): boolean {
+  return threshold !== 'none' && severityRank[rating] >= severityRank[threshold];
+}
+
 export function createReport(findings: Finding[]): DriftReport {
   return {
     rating: rateFindings(findings),
