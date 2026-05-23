@@ -128,7 +128,7 @@ test('CLI git diff snapshots sample MCP config paths', async () => {
       report.findings.map((finding) => finding.kind),
       ['scope_trail.mcp_sample_server_added', 'scope_trail.mcp_sample_unpinned_command']
     );
-    assert.equal(report.findings[0].file, 'examples/.mcp.json.sample');
+    assert.equal(report.findings[0].location.file, 'examples/.mcp.json.sample');
     assert.equal(report.findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
   } finally {
     await fx.cleanup();
@@ -167,7 +167,7 @@ test('CLI git diff snapshots platform-suffixed MCP example paths', async () => {
       report.findings.map((finding) => finding.kind),
       ['scope_trail.mcp_sample_server_added', 'scope_trail.mcp_sample_unpinned_command']
     );
-    assert.equal(report.findings[0].file, 'examples/.mcp.json.windows.example');
+    assert.equal(report.findings[0].location.file, 'examples/.mcp.json.windows.example');
     assert.equal(report.findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
   } finally {
     await fx.cleanup();
@@ -239,7 +239,7 @@ test('CLI git diff snapshots prefixed MCP config example paths', async () => {
       report.findings.map((finding) => finding.kind),
       ['scope_trail.mcp_sample_server_added', 'scope_trail.mcp_sample_unpinned_command']
     );
-    assert.equal(report.findings[0].file, 'examples/example_mcp_config.json');
+    assert.equal(report.findings[0].location.file, 'examples/example_mcp_config.json');
     assert.equal(report.findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
   } finally {
     await fx.cleanup();

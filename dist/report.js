@@ -1,3 +1,37 @@
+import { createFinding as createCanonicalFinding, createReport as createCanonicalReport, } from 'agent-gov-core';
+/**
+ * Project a ScopeTrail-internal {@link DriftReport} into the canonical
+ * agent-gov-core {@link CanonicalReport} envelope. Used at the JSON
+ * serialization boundary so cross-tool meta-reviewers (GovVerdict) ingest
+ * one shape across the whole suite. The legacy ScopeTrail finding fields
+ * `subject` and `recommendation` ride along under `data.*` per finding so
+ * no information is lost. Internal markdown / text / github renderers
+ * continue to consume `DriftReport` directly.
+ */
+function toCanonicalReport(report) {
+    const findings = report.findings.map((f) => {
+        // Strip the `scope_trail.` namespace prefix because createFinding rebuilds
+        // it from `tool` + `name`. The detectors all emit fully-namespaced kinds.
+        const name = f.kind.startsWith('scope_trail.')
+            ? f.kind.slice('scope_trail.'.length)
+            : f.kind;
+        const data = {};
+        if (f.subject)
+            data.subject = f.subject;
+        if (f.recommendation)
+            data.recommendation = f.recommendation;
+        const spec = {
+            tool: 'scope_trail',
+            name,
+            severity: f.severity,
+            message: f.message,
+            location: f.line !== undefined ? { file: f.file, line: f.line } : { file: f.file },
+            ...(Object.keys(data).length > 0 ? { data } : {}),
+        };
+        return createCanonicalFinding(spec);
+    });
+    return createCanonicalReport({ tool: 'scope_trail', findings });
+}
 const severityRank = {
     none: 0,
     low: 1,
@@ -24,7 +58,7 @@ export function createReport(findings) {
 }
 export function renderReport(report, format) {
     if (format === 'json') {
-        return `${JSON.stringify(report, null, 2)}\n`;
+        return `${JSON.stringify(toCanonicalReport(report), null, 2)}\n`;
     }
     if (format === 'markdown') {
         return renderMarkdown(report);

@@ -1,3 +1,9 @@
+import {
+  createFinding as createCanonicalFinding,
+  createReport as createCanonicalReport,
+  type Finding as CanonicalFinding,
+  type Report as CanonicalReport,
+} from 'agent-gov-core';
 import type { Finding, Severity } from './types.js';
 
 export type DriftRating = 'none' | Severity;
@@ -7,6 +13,38 @@ export interface DriftReport {
   rating: DriftRating;
   findingCount: number;
   findings: Finding[];
+}
+
+/**
+ * Project a ScopeTrail-internal {@link DriftReport} into the canonical
+ * agent-gov-core {@link CanonicalReport} envelope. Used at the JSON
+ * serialization boundary so cross-tool meta-reviewers (GovVerdict) ingest
+ * one shape across the whole suite. The legacy ScopeTrail finding fields
+ * `subject` and `recommendation` ride along under `data.*` per finding so
+ * no information is lost. Internal markdown / text / github renderers
+ * continue to consume `DriftReport` directly.
+ */
+function toCanonicalReport(report: DriftReport): CanonicalReport {
+  const findings: CanonicalFinding[] = report.findings.map((f) => {
+    // Strip the `scope_trail.` namespace prefix because createFinding rebuilds
+    // it from `tool` + `name`. The detectors all emit fully-namespaced kinds.
+    const name = f.kind.startsWith('scope_trail.')
+      ? f.kind.slice('scope_trail.'.length)
+      : f.kind;
+    const data: Record<string, unknown> = {};
+    if (f.subject) data.subject = f.subject;
+    if (f.recommendation) data.recommendation = f.recommendation;
+    const spec: Parameters<typeof createCanonicalFinding>[0] = {
+      tool: 'scope_trail',
+      name,
+      severity: f.severity,
+      message: f.message,
+      location: f.line !== undefined ? { file: f.file, line: f.line } : { file: f.file },
+      ...(Object.keys(data).length > 0 ? { data } : {}),
+    };
+    return createCanonicalFinding(spec);
+  });
+  return createCanonicalReport({ tool: 'scope_trail', findings });
 }
 
 const severityRank: Record<DriftRating, number> = {
@@ -39,7 +77,7 @@ export function createReport(findings: Finding[]): DriftReport {
 
 export function renderReport(report: DriftReport, format: ReportFormat): string {
   if (format === 'json') {
-    return `${JSON.stringify(report, null, 2)}\n`;
+    return `${JSON.stringify(toCanonicalReport(report), null, 2)}\n`;
   }
 
   if (format === 'markdown') {

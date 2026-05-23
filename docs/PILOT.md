@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Conalh/ScopeTrail@v0.1.11
+      - uses: Conalh/ScopeTrail@v0.2.0
         with:
           fail-on: none
 ```
