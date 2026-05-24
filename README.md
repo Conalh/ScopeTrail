@@ -53,6 +53,8 @@ ScopeTrail reports `HIGH` permission drift and emits GitHub warning annotations 
 
 ![ScopeTrail PR annotations showing risky Claude and MCP config changes](assets/demo-pr-annotations.png)
 
+For a PR that exercises all five suite tools at once, see [agent-gov-demo PR #1](https://github.com/Conalh/agent-gov-demo/pull/1).
+
 ## Local Use
 
 ```powershell
