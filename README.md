@@ -5,59 +5,55 @@
 [![Local-only](https://img.shields.io/badge/runs-local--only-success.svg)](#how-it-works)
 [![Release](https://img.shields.io/github/v/release/Conalh/ScopeTrail)](https://github.com/Conalh/ScopeTrail/releases)
 
-**ScopeTrail diffs the agent config files in a pull request and tells you what
-permissions, MCP servers, and hooks just changed.**
+**A PR-level permission drift detector for AI-agent configuration.** ScopeTrail compares agent config files between pull-request base and head, then reports what permissions, MCP servers, hooks, and sandbox settings changed.
 
-## The problem
+AI-agent review is no longer just code review. A PR can leave the application logic alone while quietly widening `Bash(npm *)`, removing `Read(.env)`, adding an unpinned MCP server, or enabling network access in Codex. ScopeTrail makes that config drift visible before the new permission surface becomes the default behavior for every future agent run.
 
-AI coding agents quietly edit their own permission surfaces. A PR titled *"add
-billing endpoint"* can add an `npx ... @latest` MCP server, widen `Bash(npm *)`,
-remove a `Read(.env)` deny rule, or swap a `PreToolUse` hook for a no-op — and
-none of that shows up in a normal code review. ScopeTrail reads the PR base and
-head, compares the agent-config files between them, and reports exactly what
-changed and why it matters.
+```mermaid
+flowchart LR
+    Base["PR base<br/>agent config before"] --> Diff
+    Head["PR head<br/>agent config after"] --> Diff
+    Diff[("ScopeTrail<br/>permission drift diff")] --> Report["Review output<br/>annotations · markdown · JSON"]
+    Report --> Reviewer["Reviewer sees<br/>what changed and why"]
 
-## Quickstart
+    classDef input fill:#1e293b,stroke:#334155,color:#e2e8f0
+    classDef engine fill:#0f172a,stroke:#1e293b,color:#e2e8f0,stroke-width:2px
+    classDef output fill:#0c4a6e,stroke:#0369a1,color:#e0f2fe
+    class Base,Head input
+    class Diff engine
+    class Report,Reviewer output
+```
 
-Install from npm and run against the current repo:
+**See also:** [PolicyMesh](https://github.com/Conalh/PolicyMesh) for contradictions across current policy files · [CapabilityEcho](https://github.com/Conalh/CapabilityEcho) for capability drift through code · [GovVerdict](https://github.com/Conalh/GovVerdict) for one merged suite verdict.
 
-Pilot ScopeTrail in a real repository and share team feedback in the [active pilot issue](https://github.com/Conalh/ScopeTrail/issues/18).
+## Why this exists
 
-## Part of an AI-agent governance suite
+AI coding agents are governed by repo-local files: MCP configs, Claude settings, Codex config, hooks, and sandbox policy. Those files are just as load-bearing as source code, but normal PR review tends to treat them as setup noise.
 
-Five tools mapping orthogonal failure modes of AI-agent deployment:
+ScopeTrail exists for the moment when the task says “add billing endpoint” and the diff also changes the agent’s future permissions. It answers the review question directly: **what did this PR make the agent newly able to do?**
 
-- **ScopeTrail** *(this repo)* — config drift over time (PR-level).
-- **[PolicyMesh](https://github.com/Conalh/PolicyMesh)** — policy contradictions across agent surfaces.
-- **[CapabilityEcho](https://github.com/Conalh/CapabilityEcho)** — capability drift via code, not config.
-- **[TaskBound](https://github.com/Conalh/TaskBound)** — scope creep after the agent runs.
-- **[SessionTrail](https://github.com/Conalh/SessionTrail)** — runtime behavior review across agent session transcripts.
+## What it catches
 
-ScopeTrail, PolicyMesh, and CapabilityEcho are preventive (static analysis of config and code). SessionTrail is runtime (in-session transcript review). TaskBound is detective (stated task vs. actual diff).
-
-Plus, sitting alongside the five detectors:
-
-- **[GovVerdict](https://github.com/Conalh/GovVerdict)** — meta-reviewer that merges JSON reports from the five tools above into one PR verdict.
-- **[agent-gov-core](https://github.com/Conalh/agent-gov-core)** — shared `Finding` schema, `mergeFindings`, and parsers all six tools consume.
-- **[agent-gov-demo](https://github.com/Conalh/agent-gov-demo)** — demo sandbox; [PR #1](https://github.com/Conalh/agent-gov-demo/pull/1) trips all five detectors at once.
+| Drift class | Example |
+| --- | --- |
+| **MCP drift** | New server added, command changed, `@latest` introduced, Windsurf `serverUrl` changed. |
+| **Claude permission drift** | Broad allow rules added, deny rules removed, hooks added/removed/swapped. |
+| **Codex drift** | Sandbox elevation, weaker approval policy, network access enabled, trusted-project changes. |
+| **Review drift** | Config changes that look harmless in a file-by-file diff but materially change the agent surface. |
 
 ## Demo
 
 Live demo PR: [Demo: risky agent permission drift](https://github.com/Conalh/ScopeTrail/pull/3)
 
-That PR intentionally adds:
-
-- A new `stripe-admin` MCP server.
-- An unpinned `@latest` MCP package.
-- Broad Claude Code rules: `Bash(npm *)` and `Read(~/**)`.
+That PR intentionally adds a new `stripe-admin` MCP server, an unpinned `@latest` MCP package, and broad Claude Code rules: `Bash(npm *)` and `Read(~/**)`.
 
 ScopeTrail reports `HIGH` permission drift and emits GitHub warning annotations on the risky config lines.
 
 ![ScopeTrail PR annotations showing risky Claude and MCP config changes](assets/demo-pr-annotations.png)
 
-For a PR that exercises all five suite tools at once, see [agent-gov-demo PR #1](https://github.com/Conalh/agent-gov-demo/pull/1).
+For a PR that exercises the whole suite at once, see [agent-gov-demo PR #1](https://github.com/Conalh/agent-gov-demo/pull/1).
 
-## Local Use
+## Quickstart
 
 Easy path — no clone, runs against the current repo:
 
@@ -65,18 +61,9 @@ Easy path — no clone, runs against the current repo:
 npx scopetrail diff --repo . --base main --head HEAD --format text
 ```
 
-Or build from source:
-
-```powershell
-npm install
-npm run build
-node dist/index.js diff --old test/fixtures/combined/old --new test/fixtures/combined/new --format markdown
-```
-
 Or as a GitHub Action on pull requests:
 
 ```yaml
-# .github/workflows/scopetrail.yml
 name: ScopeTrail
 on: pull_request
 permissions:
@@ -93,14 +80,21 @@ jobs:
           fail-on: none       # start advisory; raise to high/critical later
 ```
 
-The Action writes a Markdown report to the GitHub step summary and emits
-PR-visible warning annotations on the exact config lines that drifted.
+The Action writes a Markdown report to the GitHub step summary and emits PR-visible warning annotations on the exact config lines that drifted.
+
+Pilot ScopeTrail in a real repository and share team feedback in the [active pilot issue](https://github.com/Conalh/ScopeTrail/issues/18).
+
+## Local development
+
+```powershell
+npm install
+npm run build
+node dist/index.js diff --old test/fixtures/combined/old --new test/fixtures/combined/new --format markdown
+```
 
 ## Example output
 
-Text output against the bundled `test/fixtures/combined` fixture (a PR that
-adds an unpinned `stripe-admin` MCP server, widens Claude permissions, removes
-a `.env` deny rule, and drops a `PreToolUse` hook):
+Text output against the bundled `test/fixtures/combined` fixture:
 
 ```
 ScopeTrail permission drift: CRITICAL
@@ -112,9 +106,7 @@ ScopeTrail permission drift: CRITICAL
 [HIGH]     PreToolUse:   Claude hook "PreToolUse" was removed.
 ```
 
-`--format json` emits the canonical [agent-gov-core](https://github.com/Conalh/agent-gov-core)
-`Report` envelope so cross-tool reviewers (GovVerdict) can merge findings
-across the suite:
+`--format json` emits the canonical [agent-gov-core](https://github.com/Conalh/agent-gov-core) `Report` envelope so cross-tool reviewers like GovVerdict can merge findings across the suite:
 
 ```json
 {
@@ -138,36 +130,24 @@ across the suite:
 }
 ```
 
-In a real PR the same findings render as inline warning annotations:
-
-![ScopeTrail PR annotations showing risky Claude and MCP config changes](assets/demo-pr-annotations.png)
-
-<!-- TODO: add an asciinema GIF of `scopetrail diff` running locally against the demo repo -->
-
 ## How it works
 
-ScopeTrail is **local-only**. It reads the checked-out repository, materializes
-the two git refs into temp directories, runs three detectors over them, and
-prints the result. It uploads nothing, calls no external services, and has no
-required API keys.
+ScopeTrail is **local-only**. It reads the checked-out repository, materializes the two git refs into temp directories, runs detectors over them, and prints the result. It uploads nothing, calls no external services, and has no required API keys.
 
 The detectors cover the surfaces an AI agent can actually escalate through:
 
-- **MCP** — `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`,
-  `.codeium/windsurf/mcp_config.json`, sample/template/disabled variants, and
-  prefixed sample files such as `claude_mcp_config.json`. Catches added
-  servers, changed launch commands, `@latest` and other unpinned versions,
-  and Windsurf `serverUrl` changes.
-- **Claude Code settings** — `.claude/settings.json`. Catches widened allow
-  rules (`Bash(npm *)`, `Read(~/**)`), removed deny rules (`Read(.env)`), and
-  added / removed / command-swapped hooks.
-- **Codex** — `.codex/config.toml`. Catches sandbox elevation, weakened
-  approval policy, enabled network access, trusted-project changes, and
-  `[mcp_servers.NAME]` additions / unpinned commands.
+- **MCP** — `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.codeium/windsurf/mcp_config.json`, sample/template/disabled variants, and prefixed sample files such as `claude_mcp_config.json`.
+- **Claude Code settings** — `.claude/settings.json`, including widened allow rules, removed deny rules, and added / removed / command-swapped hooks.
+- **Codex** — `.codex/config.toml`, including sandbox elevation, weakened approval policy, network access, trusted-project changes, and `[mcp_servers.NAME]` additions / unpinned commands.
 
-Findings carry a `severity` (`low` / `medium` / `high` / `critical`) and the
-report's overall `rating` is the max severity across findings. `--fail-on`
-gates CI on that rating.
+Findings carry a `severity` (`low` / `medium` / `high` / `critical`) and the report's overall `rating` is the max severity across findings. `--fail-on` gates CI on that rating.
+
+## Design choices worth flagging
+
+- **Diff-first.** ScopeTrail cares about what changed in this PR, not whether the repo already had historical config debt.
+- **Line-level review output.** Findings point at the changed config lines so reviewers can discuss a concrete permission change.
+- **Local-only by design.** The tool does not need hosted state or access to your secrets.
+- **Suite-shaped output.** JSON uses the shared `Finding` contract so GovVerdict can dedupe it with PolicyMesh, CapabilityEcho, TaskBound, and SessionTrail.
 
 ## Options
 
@@ -183,7 +163,7 @@ CLI:
 | `--format <fmt>` | `text` (default), `markdown`, `json`, or `github`. |
 | `--out-markdown <path>` | Also write a Markdown report to this path. |
 | `--out-json <path>` | Also write the canonical JSON report to this path. |
-| `--fail-on <rating>` | Exit 1 when rating ≥ `low` / `medium` / `high` / `critical`. Default `none`. |
+| `--fail-on <rating>` | Exit 1 when rating >= `low` / `medium` / `high` / `critical`. Default `none`. |
 
 GitHub Action inputs (`Conalh/ScopeTrail@v0.2.0`):
 
@@ -194,40 +174,21 @@ GitHub Action inputs (`Conalh/ScopeTrail@v0.2.0`):
 | `head` | PR head SHA | Head ref. |
 | `fail-on` | `none` | Severity that fails the action. |
 
-Action outputs: `rating` (`none`/`low`/`medium`/`high`/`critical`) and
-`finding-count`.
-
-## Development
-
-```bash
-npm install
-npm run build
-npm test
-```
-
-Shared parsers, the canonical `Finding` schema, and `mergeFindings` live in
-[agent-gov-core](https://github.com/Conalh/agent-gov-core) — see its
-[CONTRIBUTING.md](https://github.com/Conalh/agent-gov-core/blob/main/CONTRIBUTING.md)
-before touching that library.
-
----
+Action outputs: `rating` (`none`/`low`/`medium`/`high`/`critical`) and `finding-count`.
 
 ## Part of the agent-gov suite
 
-ScopeTrail is one tool in a suite of local-only OSS reviewers for AI-agent PRs
-and coding sessions. Each tool catches an orthogonal failure mode; each emits
-the same `Finding` shape so they can be merged into a single verdict.
+Local-only OSS tools that review AI-agent PRs and coding sessions for config drift, policy mismatches, and scope creep. Each tool covers an orthogonal failure mode; each emits the same `Finding` shape so GovVerdict can merge them into one verdict.
 
 | Repo | What it catches |
 | --- | --- |
-| **[ScopeTrail](https://github.com/Conalh/ScopeTrail)** *(this repo)* | Agent config drift between PR base and head (MCP, Claude, Codex). |
-| [PolicyMesh](https://github.com/Conalh/PolicyMesh) | Contradictions across MCP / Claude / Codex policy surfaces in one repo. |
-| [CapabilityEcho](https://github.com/Conalh/CapabilityEcho) | Network, subprocess, and capability signals introduced by a code diff. |
-| [TaskBound](https://github.com/Conalh/TaskBound) | Scope creep — stated task vs. what the diff actually changed. |
-| [SessionTrail](https://github.com/Conalh/SessionTrail) | Risky behavior in Cursor / Claude / Codex session transcripts (JSONL). |
-| [GovVerdict](https://github.com/Conalh/GovVerdict) | Merges JSON reports from the tools above into one verdict. |
+| **ScopeTrail** *(this repo)* | Agent config drift between PR base and head. |
+| [PolicyMesh](https://github.com/Conalh/PolicyMesh) | Contradictory agent instructions and config drift that make behavior non-reproducible. |
+| [CapabilityEcho](https://github.com/Conalh/CapabilityEcho) | Capability drift introduced by code, manifests, workflows, and Dockerfiles. |
+| [TaskBound](https://github.com/Conalh/TaskBound) | Scope creep between the stated task and the actual diff. |
+| [SessionTrail](https://github.com/Conalh/SessionTrail) | Risky runtime behavior in Cursor / Claude Code / Codex session transcripts. |
+| [GovVerdict](https://github.com/Conalh/GovVerdict) | Merges JSON reports from the tools above into one deduped review. |
 | [agent-gov-core](https://github.com/Conalh/agent-gov-core) | Shared parsers, the canonical `Finding` schema, and `mergeFindings`. |
 | [agent-gov-demo](https://github.com/Conalh/agent-gov-demo) | Demo sandbox with a rogue PR that fires all five reviewers. |
 
-See the full stack in action on the demo PR:
-[agent-gov-demo#1](https://github.com/Conalh/agent-gov-demo/pull/1).
+MIT. Bug reports and false-positive reports welcome via [Issues](https://github.com/Conalh/ScopeTrail/issues).
