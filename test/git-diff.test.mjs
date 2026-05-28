@@ -207,6 +207,43 @@ test('CLI surfaces a friendly error when a git ref cannot be resolved', async ()
   }
 });
 
+test('CLI rejects git refs that could be parsed as git CLI flags', async () => {
+  // Hardening: `execFile` blocks shell injection, but `git` re-parses
+  // each positional arg against its own option table. A ref like
+  // `--upload-pack=...` or `--help` would otherwise be consumed by
+  // git as a flag rather than a revision. We surface a clean error
+  // before invoking git so the injection vector is closed.
+  const fx = await makeGitRepo({
+    prefix: 'scopetrail-git-bad-ref-flag-',
+    initialFiles: { 'README.md': 'base\n' },
+    initialMessage: 'base',
+  });
+  try {
+    // Note: bare `--help` / `-h` are intercepted by the top-level CLI
+    // parser before reaching ref validation, so they're omitted here.
+    // The remaining patterns are the real argument-injection vectors.
+    for (const bad of ['-rf', '--upload-pack=evil', '--exec=evil', 'main:evil']) {
+      let stderr = '';
+      let exitCode = 0;
+      try {
+        await execFileAsync(
+          process.execPath,
+          ['dist/index.js', 'diff', '--repo', fx.repo, '--base', bad, '--head', 'HEAD', '--format', 'json'],
+          { cwd: packageRoot }
+        );
+      } catch (error) {
+        stderr = error.stderr ?? '';
+        exitCode = error.code ?? 0;
+      }
+
+      assert.equal(exitCode, 2, `expected exit code 2 for rejected ref ${bad}`);
+      assert.match(stderr, /Invalid git ref/, `error should reject ref ${bad}`);
+    }
+  } finally {
+    await fx.cleanup();
+  }
+});
+
 test('CLI git diff snapshots prefixed MCP config example paths', async () => {
   const fx = await makeGitRepo({
     prefix: 'scopetrail-git-prefixed-sample-',

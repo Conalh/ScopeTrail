@@ -120,14 +120,41 @@ function renderMarkdown(report: DriftReport): string {
 
     lines.push(`## ${capitalize(severity)}`, '');
     for (const finding of matches) {
-      lines.push(`- **${finding.subject}** (${finding.file}): ${finding.message}`);
-      lines.push(`  Recommendation: ${finding.recommendation}`);
+      // Config-derived strings (server names, permission patterns, paths)
+      // flow into `subject`, `file`, and `message`. Wrap the code-like
+      // fields in backticks and escape inline markdown chars in `message`
+      // so a hostile config can't inject links, images, raw HTML, or
+      // emphasis runs into the PR comment. `recommendation` is hardcoded
+      // by detectors, but we escape it for hygiene.
+      lines.push(`- **${mdCode(finding.subject)}** (${mdCode(finding.file)}): ${escapeMdInline(finding.message)}`);
+      lines.push(`  Recommendation: ${escapeMdInline(finding.recommendation)}`);
     }
     lines.push('');
   }
 
   appendPilotFeedback(lines);
   return `${lines.join('\n').trimEnd()}\n`;
+}
+
+// Escape the markdown inline-syntax characters that a config-controlled
+// string could otherwise use to inject formatting, links, images, or
+// raw HTML into a rendered PR comment. We intentionally do NOT escape
+// punctuation like `.` `-` `+` — block-level constructs only matter at
+// line start, and our findings never put untrusted input there.
+function escapeMdInline(value: string): string {
+  return value.replace(/[\\`*_[\]<>|!]/g, '\\$&');
+}
+
+// Wrap a value in a backtick code span. Pick a fence longer than any
+// internal backtick run so the value can't break out of the span, and
+// pad with a space when it starts or ends with a backtick (the only
+// way CommonMark lets a code span begin/end with backtick).
+function mdCode(value: string): string {
+  const runs = value.match(/`+/g) ?? [];
+  const longest = runs.reduce((max, run) => Math.max(max, run.length), 0);
+  const fence = '`'.repeat(longest + 1);
+  const padding = value.startsWith('`') || value.endsWith('`') ? ' ' : '';
+  return `${fence}${padding}${value}${padding}${fence}`;
 }
 
 function appendPilotFeedback(lines: string[]): void {

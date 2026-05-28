@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { CLAUDE_TARGET_PATHS } from './detectors/claude-settings.js';
 import { CODEX_TARGET_PATHS } from './detectors/codex-config.js';
@@ -20,6 +20,7 @@ export const SNAPSHOT_PATHS = [
 export async function materializeGitSnapshot(repo, ref) {
     await verifyGitRef(repo, ref);
     const root = await mkdtemp(join(tmpdir(), 'scopetrail-snapshot-'));
+    const resolvedRoot = resolve(root);
     let completed = false;
     try {
         for (const relativePath of await snapshotPathsForRef(repo, ref)) {
@@ -27,7 +28,15 @@ export async function materializeGitSnapshot(repo, ref) {
             if (content === null) {
                 continue;
             }
+            // Defense-in-depth: refuse paths that resolve outside the snapshot
+            // root. Git normally rejects `..` segments in tracked paths, but
+            // we never want a hostile or malformed ref to coax `mkdir` /
+            // `writeFile` into clobbering files outside the temp dir.
             const targetPath = join(root, relativePath);
+            const resolvedTarget = resolve(targetPath);
+            if (resolvedTarget !== resolvedRoot && !resolvedTarget.startsWith(resolvedRoot + sep)) {
+                continue;
+            }
             await mkdir(dirname(targetPath), { recursive: true });
             await writeFile(targetPath, content);
         }
@@ -55,6 +64,19 @@ async function snapshotPathsForRef(repo, ref) {
     return [...paths].sort();
 }
 async function verifyGitRef(repo, ref) {
+    // Reject refs whose first byte would be parsed by `git` as a CLI
+    // flag rather than a revision (`--upload-pack=...`, `--help`, etc.).
+    // `execFile` already blocks shell-metacharacter injection, but
+    // execFile passes the value through as a positional argument that
+    // git then re-parses against its own option table — so a `-`-leading
+    // ref is an argument-injection vector. The detector also reads
+    // `ref:relativePath`, so a colon in the ref would re-anchor the
+    // object selector; refuse that too. Refs are also rejected if they
+    // contain control characters, which git would not accept anyway but
+    // we surface a clean error instead of a raw rejection.
+    if (!ref || ref.startsWith('-') || ref.includes(':') || /[\x00-\x1f\x7f]/.test(ref)) {
+        throw new ScopeTrailError(`Invalid git ref "${ref}". Refs cannot start with "-", contain ":", or include control characters.`);
+    }
     try {
         await execFileAsync('git', ['-C', repo, 'rev-parse', '--verify', `${ref}^{commit}`]);
     }
@@ -74,27 +96,57 @@ export class ScopeTrailError extends Error {
     }
 }
 async function listPathsAtRef(repo, ref) {
-    const { stdout } = await execFileAsync('git', ['-C', repo, 'ls-tree', '-r', '--name-only', ref], {
-        encoding: 'utf8',
-        maxBuffer: 10 * 1024 * 1024
-    });
-    return stdout.split(/\r?\n/).filter(Boolean);
+    try {
+        const { stdout } = await execFileAsync('git', ['-C', repo, 'ls-tree', '-r', '--name-only', ref], {
+            encoding: 'utf8',
+            maxBuffer: GIT_MAX_BUFFER
+        });
+        return stdout.split(/\r?\n/).filter(Boolean);
+    }
+    catch (error) {
+        if (isMaxBufferError(error)) {
+            throw new ScopeTrailError(`Listing tracked files at git ref "${ref}" exceeded ScopeTrail's ${formatBytes(GIT_MAX_BUFFER)} buffer. ` +
+                'The repository likely has more tracked filenames than the snapshot pipeline can hold in memory.', { cause: error });
+        }
+        throw error;
+    }
 }
 async function readPathAtRef(repo, ref, relativePath) {
     try {
         const { stdout } = await execFileAsync('git', ['-C', repo, 'show', `${ref}:${relativePath}`], {
             encoding: 'utf8',
-            maxBuffer: 10 * 1024 * 1024
+            maxBuffer: GIT_MAX_BUFFER
         });
         return stdout;
     }
     catch (error) {
+        // A maxBuffer overflow is structurally different from "file
+        // doesn't exist at this ref" — the previous catch-all returned
+        // null for both, which would silently drop an oversized config
+        // file from the snapshot and let the detector report a clean
+        // diff against an empty placeholder. Surface it as a clear error.
+        if (isMaxBufferError(error)) {
+            throw new ScopeTrailError(`Reading "${relativePath}" at git ref "${ref}" exceeded ScopeTrail's ${formatBytes(GIT_MAX_BUFFER)} buffer. ` +
+                'Config files larger than the snapshot buffer cannot be analysed; consider splitting the file or filing an issue.', { cause: error });
+        }
         if (isExecError(error)) {
             return null;
         }
         throw error;
     }
 }
+const GIT_MAX_BUFFER = 50 * 1024 * 1024;
+function isMaxBufferError(error) {
+    return error instanceof Error
+        && 'code' in error
+        && error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
+}
 function isExecError(error) {
     return error instanceof Error && 'code' in error;
+}
+function formatBytes(bytes) {
+    if (bytes >= 1024 * 1024) {
+        return `${Math.round(bytes / (1024 * 1024))} MB`;
+    }
+    return `${bytes} bytes`;
 }

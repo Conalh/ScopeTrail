@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -54,6 +54,85 @@ test('CLI emits Markdown permission drift report', async () => {
   assert.match(stdout, /## Feedback/);
   assert.match(stdout, /issues\/new\/choose/);
   assert.match(stdout, /false positives or missing config surfaces/i);
+});
+
+test('Markdown render escapes config-controlled strings against injection', async () => {
+  // Config-derived strings (server names, permission patterns) flow into
+  // the markdown report. Without escaping, a hostile config could inject
+  // links, images, raw HTML, or emphasis runs into the PR comment.
+  // Subjects are wrapped in backtick code spans; messages have inline
+  // markdown chars escaped.
+  const workDir = await mkdtemp(join(tmpdir(), 'scopetrail-md-inject-'));
+  try {
+    const oldDir = join(workDir, 'old');
+    const newDir = join(workDir, 'new');
+    await mkdir(oldDir, { recursive: true });
+    await mkdir(newDir, { recursive: true });
+    // Empty base config so the hostile entries below register as
+    // additions / widenings.
+    await writeFile(join(oldDir, '.mcp.json'), '{"mcpServers": {}}\n');
+    await writeFile(
+      join(oldDir, '.claude', 'settings.json'),
+      '{"permissions": {"allow": [], "deny": []}}\n'
+    ).catch(async () => {
+      await mkdir(join(oldDir, '.claude'), { recursive: true });
+      await writeFile(
+        join(oldDir, '.claude', 'settings.json'),
+        '{"permissions": {"allow": [], "deny": []}}\n'
+      );
+    });
+
+    // A server name that tries to inject a markdown link and an image,
+    // and a permission entry that includes backticks + emphasis.
+    const hostileServerName = 'evil](https://attacker.example)<img src=x>';
+    await writeFile(
+      join(newDir, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          [hostileServerName]: {
+            command: 'npx',
+            args: ['-y', '@vendor/pkg@latest']
+          }
+        }
+      }, null, 2) + '\n'
+    );
+    await mkdir(join(newDir, '.claude'), { recursive: true });
+    await writeFile(
+      join(newDir, '.claude', 'settings.json'),
+      JSON.stringify({
+        permissions: { allow: ['Bash'], deny: [] }
+      }, null, 2) + '\n'
+    );
+
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      ['dist/index.js', 'diff', '--old', oldDir, '--new', newDir, '--format', 'markdown'],
+      { cwd: packageRoot }
+    );
+
+    // Strip backtick code spans before checking — chars inside a code
+    // span are inert (markdown renders them as literal code), so the
+    // security property only applies to the prose outside spans.
+    const outsideCodeSpans = stdout.replace(/`[^`]*`/g, '');
+    // Outside code spans, every `](` must be backslash-escaped —
+    // otherwise it forms a markdown link. Same for `<img` (raw HTML)
+    // and `[text]` (image/link openers).
+    assert.doesNotMatch(outsideCodeSpans, /(?<!\\)\]\(/);
+    assert.doesNotMatch(outsideCodeSpans, /(?<!\\)<img/);
+    // Message body contains the escaped versions explicitly. We
+    // escape `]` (which disarms the `[text](url)` link form by
+    // breaking the closing bracket) and the angle brackets that
+    // would otherwise open raw HTML. Parentheses stay literal —
+    // a markdown link needs an unescaped `]` AND `(`, so escaping
+    // either one is sufficient.
+    assert.match(stdout, /\\\]\(https:\/\/attacker\.example\)/);
+    assert.match(stdout, /\\<img src=x\\>/);
+    // Subjects are wrapped in backtick code spans so the raw hostile
+    // string renders as code rather than as markdown syntax.
+    assert.match(stdout, /`evil\]\(https:\/\/attacker\.example\)<img src=x>`/);
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
 });
 
 test('CLI emits GitHub warning annotations for permission drift findings', async () => {
