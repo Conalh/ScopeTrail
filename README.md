@@ -55,10 +55,12 @@ For a PR that exercises the whole suite at once, see [agent-gov-demo PR #1](http
 
 ## Quickstart
 
-Easy path — no clone, runs against the current repo:
+ScopeTrail isn't published to npm yet — clone, build, and run against any repo:
 
 ```bash
-npx scopetrail diff --repo . --base main --head HEAD --format text
+git clone https://github.com/Conalh/ScopeTrail && cd ScopeTrail
+npm install && npm run build
+node dist/index.js diff --repo . --base main --head HEAD --format text
 ```
 
 Or as a GitHub Action on pull requests:
