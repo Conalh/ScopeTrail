@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Under v1.0, minor versions may carry breaking changes.
 
+## [0.3.1] — 2026-05-28
+
+### Internal
+- Adopted the shared diff-input safety guards from `agent-gov-core` 1.3.0: the local `verifyGitRef` string check is now `isValidGitRef`, and the snapshot path-containment check is now `resolveWithinRoot`. Behavior is identical — the guards were lifted verbatim out of this detector into core so every suite tool enforces the same argument-injection and path-traversal rules. Bumped `agent-gov-core` `^1.2.1` → `^1.3.0`.
+
 ## [0.3.0] — 2026-05-28
 
 ### Changed

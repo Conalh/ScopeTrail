@@ -77,7 +77,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0      # required: ScopeTrail compares base..head
-      - uses: Conalh/ScopeTrail@v0.3.0
+      - uses: Conalh/ScopeTrail@v0.3.1
         with:
           fail-on: none       # start advisory; raise to high/critical later
 ```
@@ -184,7 +184,7 @@ CLI:
 | `--out-json <path>` | Also write the canonical JSON report to this path. |
 | `--fail-on <rating>` | Exit 1 when rating >= `low` / `medium` / `high` / `critical`. Default `none`. |
 
-GitHub Action inputs (`Conalh/ScopeTrail@v0.3.0`):
+GitHub Action inputs (`Conalh/ScopeTrail@v0.3.1`):
 
 | Input | Default | Description |
 | --- | --- | --- |

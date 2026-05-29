@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
+import { isValidGitRef, resolveWithinRoot } from 'agent-gov-core';
 import { CLAUDE_TARGET_PATHS } from './detectors/claude-settings.js';
 import { CODEX_TARGET_PATHS } from './detectors/codex-config.js';
 import { MCP_TARGET_PATHS, isMcpSampleConfigPath } from './detectors/mcp.js';
@@ -20,7 +21,6 @@ export const SNAPSHOT_PATHS = [
 export async function materializeGitSnapshot(repo, ref) {
     await verifyGitRef(repo, ref);
     const root = await mkdtemp(join(tmpdir(), 'scopetrail-snapshot-'));
-    const resolvedRoot = resolve(root);
     let completed = false;
     try {
         for (const relativePath of await snapshotPathsForRef(repo, ref)) {
@@ -32,9 +32,8 @@ export async function materializeGitSnapshot(repo, ref) {
             // root. Git normally rejects `..` segments in tracked paths, but
             // we never want a hostile or malformed ref to coax `mkdir` /
             // `writeFile` into clobbering files outside the temp dir.
-            const targetPath = join(root, relativePath);
-            const resolvedTarget = resolve(targetPath);
-            if (resolvedTarget !== resolvedRoot && !resolvedTarget.startsWith(resolvedRoot + sep)) {
+            const targetPath = resolveWithinRoot(root, relativePath);
+            if (targetPath === null) {
                 continue;
             }
             await mkdir(dirname(targetPath), { recursive: true });
@@ -64,17 +63,12 @@ async function snapshotPathsForRef(repo, ref) {
     return [...paths].sort();
 }
 async function verifyGitRef(repo, ref) {
-    // Reject refs whose first byte would be parsed by `git` as a CLI
-    // flag rather than a revision (`--upload-pack=...`, `--help`, etc.).
-    // `execFile` already blocks shell-metacharacter injection, but
-    // execFile passes the value through as a positional argument that
-    // git then re-parses against its own option table — so a `-`-leading
-    // ref is an argument-injection vector. The detector also reads
-    // `ref:relativePath`, so a colon in the ref would re-anchor the
-    // object selector; refuse that too. Refs are also rejected if they
-    // contain control characters, which git would not accept anyway but
-    // we surface a clean error instead of a raw rejection.
-    if (!ref || ref.startsWith('-') || ref.includes(':') || /[\x00-\x1f\x7f]/.test(ref)) {
+    // String-level argument-injection guard, shared across the suite via
+    // agent-gov-core: rejects `-`-leading refs (which git re-parses as CLI
+    // flags), refs containing ':' (which would re-anchor the `ref:path`
+    // object selector this detector builds), and control characters. The
+    // `rev-parse --verify` below is the resolution-time backstop.
+    if (!isValidGitRef(ref)) {
         throw new ScopeTrailError(`Invalid git ref "${ref}". Refs cannot start with "-", contain ":", or include control characters.`);
     }
     try {
