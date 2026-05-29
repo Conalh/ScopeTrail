@@ -15,4 +15,7 @@ export interface McpServerConfig {
   args?: string[];
   url?: string;
   serverUrl?: string;
+  env?: Record<string, unknown>;
+  headers?: Record<string, unknown>;
+  cwd?: string;
 }

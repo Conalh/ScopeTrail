@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { lineOfTomlKey, parseToml } from 'agent-gov-core';
 import { configPath } from '../discovery.js';
-import { isUnpinnedCommand, serverCommand, remoteEndpoint, isUnencryptedEndpoint } from '../mcp-risk.js';
+import { isUnpinnedCommand, serverCommand, remoteEndpoint, isUnencryptedEndpoint, readSensitiveFields, sensitiveFieldChanges, describeSensitiveFieldChange, recommendationForSensitiveFieldChange } from '../mcp-risk.js';
 export const CODEX_CONFIG_FILE = '.codex/config.toml';
 export const CODEX_TARGET_PATHS = [CODEX_CONFIG_FILE];
 export async function detectCodexConfigDrift(oldRoot, newRoot) {
@@ -205,6 +205,22 @@ async function detectCodexMcpDrift(oldRoot, newRoot) {
                     : 'Confirm the endpoint is trusted and does not expose unexpected data or tools to external hosts.'
             });
         }
+        if (oldServer) {
+            // Codex [mcp_servers.NAME] blocks carry the same env/headers/cwd
+            // capability as .mcp.json; an existing server gaining a secret-bearing
+            // env var with an unchanged command must still surface.
+            for (const change of sensitiveFieldChanges(oldServer, newServer)) {
+                findings.push({
+                    kind: 'scope_trail.codex_mcp_sensitive_field_changed',
+                    severity: change.secretLike ? 'high' : 'medium',
+                    file: CODEX_CONFIG_FILE,
+                    line: lineForServer(newServer),
+                    subject: name,
+                    message: describeSensitiveFieldChange(name, change),
+                    recommendation: recommendationForSensitiveFieldChange(change)
+                });
+            }
+        }
     }
     return findings;
 }
@@ -246,7 +262,8 @@ async function readCodexMcpServers(root) {
             url: typeof entry.url === 'string' ? entry.url : undefined,
             serverUrl: typeof entry.serverUrl === 'string'
                 ? entry.serverUrl
-                : (typeof entry.server_url === 'string' ? entry.server_url : undefined)
+                : (typeof entry.server_url === 'string' ? entry.server_url : undefined),
+            ...readSensitiveFields(entry)
         });
     }
     return servers;

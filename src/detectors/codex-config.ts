@@ -6,7 +6,12 @@ import {
   serverCommand,
   remoteEndpoint,
   isUnencryptedEndpoint,
-  type McpCommandShape
+  readSensitiveFields,
+  sensitiveFieldChanges,
+  describeSensitiveFieldChange,
+  recommendationForSensitiveFieldChange,
+  type McpCommandShape,
+  type McpSensitiveFields
 } from '../mcp-risk.js';
 import type { Finding } from '../types.js';
 
@@ -18,7 +23,7 @@ interface TomlEntry {
   value: string;
 }
 
-interface CodexMcpServer extends McpCommandShape {
+interface CodexMcpServer extends McpCommandShape, McpSensitiveFields {
   text: string;
   name: string;
 }
@@ -235,6 +240,23 @@ async function detectCodexMcpDrift(oldRoot: string, newRoot: string): Promise<Fi
           : 'Confirm the endpoint is trusted and does not expose unexpected data or tools to external hosts.'
       });
     }
+
+    if (oldServer) {
+      // Codex [mcp_servers.NAME] blocks carry the same env/headers/cwd
+      // capability as .mcp.json; an existing server gaining a secret-bearing
+      // env var with an unchanged command must still surface.
+      for (const change of sensitiveFieldChanges(oldServer, newServer)) {
+        findings.push({
+          kind: 'scope_trail.codex_mcp_sensitive_field_changed',
+          severity: change.secretLike ? 'high' : 'medium',
+          file: CODEX_CONFIG_FILE,
+          line: lineForServer(newServer),
+          subject: name,
+          message: describeSensitiveFieldChange(name, change),
+          recommendation: recommendationForSensitiveFieldChange(change)
+        });
+      }
+    }
   }
 
   return findings;
@@ -280,7 +302,8 @@ async function readCodexMcpServers(root: string): Promise<Map<string, CodexMcpSe
       url: typeof entry.url === 'string' ? entry.url : undefined,
       serverUrl: typeof entry.serverUrl === 'string'
         ? entry.serverUrl
-        : (typeof entry.server_url === 'string' ? entry.server_url : undefined)
+        : (typeof entry.server_url === 'string' ? entry.server_url : undefined),
+      ...readSensitiveFields(entry)
     });
   }
 

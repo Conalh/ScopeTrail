@@ -8,11 +8,11 @@ the pair and scores the drift engine against it. Benign cases include deliberate
 false-positive traps a naive textual diff would flag (tightened posture, removed
 servers, reordered JSON keys).
 
-- Cases: **29** (22 rogue, 7 benign) across **19** detector kinds
+- Cases: **35** (27 rogue, 8 benign) across **21** detector kinds
 - Detection (any finding): recall **100.0%**, false-positive rate **0.0%**, precision **100.0%**
-- At a `fail-on: high` CI gate: recall **81.8%**, false-positive rate **0.0%**, precision **100.0%**
-- Correct primary finding kind identified on **22/22** rogue cases; all expected kinds on **22/22**
-- Exact rating match where the label pins one: **29/29**
+- At a `fail-on: high` CI gate: recall **85.2%**, false-positive rate **0.0%**, precision **100.0%**
+- Correct primary finding kind identified on **27/27** rogue cases; all expected kinds on **27/27**
+- Exact rating match where the label pins one: **35/35**
 
 ## Confusion matrix by CI gate threshold
 
@@ -20,30 +20,30 @@ A PR is predicted "drift" when its overall rating meets the threshold. `low` = a
 
 | Gate (`fail-on`) | TP | FP | FN | TN | Precision | Recall | FP rate | F1 | Accuracy |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| low | 22 | 0 | 0 | 7 | 100.0% | 100.0% | 0.0% | 100.0% | 100.0% |
-| medium | 21 | 0 | 1 | 7 | 100.0% | 95.5% | 0.0% | 97.7% | 96.6% |
-| high | 18 | 0 | 4 | 7 | 100.0% | 81.8% | 0.0% | 90.0% | 86.2% |
-| critical | 4 | 0 | 18 | 7 | 100.0% | 18.2% | 0.0% | 30.8% | 37.9% |
+| low | 27 | 0 | 0 | 8 | 100.0% | 100.0% | 0.0% | 100.0% | 100.0% |
+| medium | 26 | 0 | 1 | 8 | 100.0% | 96.3% | 0.0% | 98.1% | 97.1% |
+| high | 23 | 0 | 4 | 8 | 100.0% | 85.2% | 0.0% | 92.0% | 88.6% |
+| critical | 5 | 0 | 22 | 8 | 100.0% | 18.5% | 0.0% | 31.3% | 37.1% |
 
 ## Detector-kind identification (rogue cases)
 
-- Primary expected kind detected: **22/22**
-- All expected kinds detected: **22/22**
-- Distinct detector kinds exercised: **19**
+- Primary expected kind detected: **27/27**
+- All expected kinds detected: **27/27**
+- Distinct detector kinds exercised: **21**
 
 ## Rating agreement
 
-Of the **29** cases whose label pins an exact consolidated rating, the diff matched **29**.
+Of the **35** cases whose label pins an exact consolidated rating, the diff matched **35**.
 
 ## Results by category
 
 | Category | Cases | Rogue detected | Benign clean |
 | --- | ---: | :---: | :---: |
-| claude-drift | 5 | 5/5 | — |
+| claude-drift | 7 | 7/7 | — |
 | clean | 1 | — | 1/1 |
-| codex-drift | 6 | 6/6 | — |
-| fp-guard | 6 | — | 6/6 |
-| mcp-drift | 5 | 5/5 | — |
+| codex-drift | 7 | 7/7 | — |
+| fp-guard | 7 | — | 7/7 |
+| mcp-drift | 7 | 7/7 | — |
 | mcp-sample | 2 | 2/2 | — |
 | multi-class | 1 | 1/1 | — |
 | robustness | 3 | 3/3 | — |
@@ -58,17 +58,21 @@ None. Every rogue case produced all of its expected finding kinds, no benign cas
 | --- | --- | --- | --- | ---: | :---: | :---: | :---: |
 | mcp-server-added | rogue | mcp-drift | high | 1 | yes | yes | yes |
 | mcp-unpinned-added | rogue | mcp-drift | high | 2 | yes | yes | yes |
+| mcp-env-secret-added | rogue | mcp-drift | high | 1 | yes | yes | yes |
 | mcp-command-changed | rogue | mcp-drift | medium | 1 | yes | yes | yes |
 | mcp-remote-http | rogue | mcp-drift | critical | 2 | yes | yes | yes |
 | mcp-remote-https | rogue | mcp-drift | high | 2 | yes | yes | yes |
 | mcp-syntax-error | rogue | robustness | high | 1 | yes | yes | yes |
+| mcp-second-map-server-added | rogue | mcp-drift | high | 2 | yes | yes | yes |
 | mcp-sample-added | rogue | mcp-sample | low | 1 | yes | yes | yes |
 | mcp-sample-pipe-to-shell | rogue | mcp-sample | high | 2 | yes | yes | yes |
 | claude-broad-allow-bash | rogue | claude-drift | high | 1 | yes | yes | yes |
 | claude-broad-allow-read | rogue | claude-drift | medium | 1 | yes | yes | yes |
 | claude-deny-removed-env | rogue | claude-drift | critical | 1 | yes | yes | yes |
+| claude-deny-removed-ssh | rogue | claude-drift | critical | 1 | yes | yes | yes |
 | claude-hook-removed | rogue | claude-drift | high | 1 | yes | yes | yes |
 | claude-hook-command-changed | rogue | claude-drift | high | 1 | yes | yes | yes |
+| claude-hook-matcher-rebound | rogue | claude-drift | high | 1 | yes | yes | yes |
 | claude-syntax-error | rogue | robustness | high | 1 | yes | yes | yes |
 | codex-sandbox-danger | rogue | codex-drift | critical | 1 | yes | yes | yes |
 | codex-sandbox-workspace | rogue | codex-drift | high | 1 | yes | yes | yes |
@@ -76,6 +80,7 @@ None. Every rogue case produced all of its expected finding kinds, no benign cas
 | codex-network-enabled | rogue | codex-drift | medium | 1 | yes | yes | yes |
 | codex-project-trusted | rogue | codex-drift | high | 1 | yes | yes | yes |
 | codex-mcp-added | rogue | codex-drift | high | 2 | yes | yes | yes |
+| codex-mcp-env-added | rogue | codex-drift | high | 1 | yes | yes | yes |
 | codex-syntax-error | rogue | robustness | high | 1 | yes | yes | yes |
 | multi-class-drift | rogue | multi-class | critical | 5 | yes | yes | yes |
 | clean-identical | benign | clean | none | 0 | — | — | yes |
@@ -83,6 +88,7 @@ None. Every rogue case produced all of its expected finding kinds, no benign cas
 | codex-narrowed | benign | fp-guard | none | 0 | — | — | yes |
 | codex-network-already-on | benign | fp-guard | none | 0 | — | — | yes |
 | codex-baseline-narrowest | benign | fp-guard | none | 0 | — | — | yes |
+| mcp-env-removed | benign | fp-guard | none | 0 | — | — | yes |
 | mcp-server-removed | benign | fp-guard | none | 0 | — | — | yes |
 | mcp-reformatted | benign | fp-guard | none | 0 | — | — | yes |
 

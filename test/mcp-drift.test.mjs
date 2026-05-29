@@ -326,6 +326,45 @@ test('detects MCP drift in Cursor and VS Code config files', async () => {
   );
 });
 
+test('merges all recognized server maps — an empty mcpServers must not shadow a populated servers', async () => {
+  // Pre-fix gap: readServerMap returned the FIRST recognized key only.
+  // For .cursor/mcp.json (serverKeys: mcpServers, servers) an empty
+  // `mcpServers: {}` shadowed a populated `servers: {}`, so every server
+  // declared under `servers` was invisible to the diff.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-merge-maps-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(join(oldDir, '.cursor'), { recursive: true });
+    mkdirSync(join(newDir, '.cursor'), { recursive: true });
+    writeFileSync(join(oldDir, '.cursor', 'mcp.json'), JSON.stringify({ mcpServers: {}, servers: {} }));
+    writeFileSync(
+      join(newDir, '.cursor', 'mcp.json'),
+      JSON.stringify({
+        mcpServers: {},
+        servers: {
+          'new-risky-server': { command: 'npx', args: ['@bad/server@latest'] }
+        }
+      }, null, 2)
+    );
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    assert.ok(
+      findings.some((f) => f.kind === 'scope_trail.mcp_server_added' && f.subject === 'new-risky-server'),
+      'server under `servers` must be detected even when an empty `mcpServers` exists'
+    );
+    assert.ok(
+      findings.some((f) => f.kind === 'scope_trail.unpinned_mcp_command' && f.subject === 'new-risky-server'),
+      'unpinned command under `servers` must also be flagged'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('detects MCP drift in Windsurf config files', async () => {
   const oldDir = join(testDir, 'fixtures', 'windsurf-mcp', 'old');
   const newDir = join(testDir, 'fixtures', 'windsurf-mcp', 'new');
@@ -416,6 +455,66 @@ test('detects prefixed MCP config example drift without treating it as active se
       ['examples/example_mcp_config.json', 'scope_trail.mcp_sample_unpinned_command', 'copy-risk', 'medium', 7]
     ]
   );
+});
+
+test('mcp_server_sensitive_field_changed: an existing server gaining env/headers/cwd is flagged; removals are not', async () => {
+  // serverCommand() ignores env/headers/cwd, so a server keeping the same
+  // launch command but gaining a secret env var, an auth header, or a
+  // redirected cwd produced no finding. Now flagged — secret-bearing keys
+  // escalate to high. Removing a key is a narrowing and stays silent.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-sensitive-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(newDir, { recursive: true });
+    writeFileSync(
+      join(oldDir, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          stripe: { command: 'npx', args: ['-y', '@vendor/stripe-mcp@1.2.3'], env: { LOG_LEVEL: 'info' } },
+          docs: { command: 'npx', args: ['-y', '@vendor/docs@1.0.0'] }
+        }
+      })
+    );
+    writeFileSync(
+      join(newDir, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          // Same command: gains a secret env var + a benign one; LOG_LEVEL removed.
+          stripe: { command: 'npx', args: ['-y', '@vendor/stripe-mcp@1.2.3'], env: { STRIPE_SECRET_KEY: '${STRIPE_SECRET_KEY}', REGION: 'us' } },
+          // Same command: gains an Authorization header and a redirected cwd.
+          docs: { command: 'npx', args: ['-y', '@vendor/docs@1.0.0'], headers: { Authorization: 'Bearer x' }, cwd: '/etc' }
+        }
+      }, null, 2)
+    );
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    const sensitive = findings.filter((f) => f.kind === 'scope_trail.mcp_server_sensitive_field_changed');
+
+    const stripeEnv = sensitive.find((f) => f.subject === 'stripe' && /environment variable/.test(f.message));
+    assert.ok(stripeEnv, 'expected env change finding for stripe');
+    assert.equal(stripeEnv.severity, 'high', 'STRIPE_SECRET_KEY is secret-like -> high');
+    assert.match(stripeEnv.message, /STRIPE_SECRET_KEY/);
+    assert.doesNotMatch(stripeEnv.message, /LOG_LEVEL/, 'a removed env var must not be reported');
+
+    const docsHeader = sensitive.find((f) => f.subject === 'docs' && /header/.test(f.message));
+    assert.ok(docsHeader, 'expected header change finding for docs');
+    assert.equal(docsHeader.severity, 'high', 'Authorization header is secret-like -> high');
+
+    const docsCwd = sensitive.find((f) => f.subject === 'docs' && /working directory/.test(f.message));
+    assert.ok(docsCwd, 'expected cwd change finding for docs');
+    assert.equal(docsCwd.severity, 'medium');
+
+    // No added/command-changed noise — both servers existed and kept their command.
+    assert.equal(findings.some((f) => f.kind === 'scope_trail.mcp_server_added'), false);
+    assert.equal(findings.some((f) => f.kind === 'scope_trail.mcp_server_command_changed'), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('mcp_remote_endpoint: http:// fires critical severity, https:// fires high', async () => {

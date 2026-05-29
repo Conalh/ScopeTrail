@@ -1,0 +1,9 @@
+{
+  "mcpServers": {},
+  "servers": {
+    "new-risky-server": {
+      "command": "npx",
+      "args": ["@bad/server@latest"]
+    }
+  }
+}
