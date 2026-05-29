@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { configPath, isRecord, lineOfJsonKey, lineOfJsonStringValue, readJsonObjectWithSource } from '../discovery.js';
-import { isPipeToShellCommand, isUnpinnedCommand, serverCommand, remoteEndpoint, isRemoteEndpoint, isUnencryptedEndpoint } from '../mcp-risk.js';
+import { isPipeToShellCommand, isUnpinnedCommand, serverCommand, remoteEndpoint, isRemoteEndpoint, isUnencryptedEndpoint, readSensitiveFields, sensitiveFieldChanges, describeSensitiveFieldChange, recommendationForSensitiveFieldChange } from '../mcp-risk.js';
 const MCP_CONFIGS = [
     { path: '.mcp.json', serverKeys: ['mcpServers'] },
     { path: '.cursor/mcp.json', serverKeys: ['mcpServers', 'servers'] },
@@ -121,6 +121,22 @@ export async function detectMcpDrift(oldRoot, newRoot) {
                         : 'Confirm the endpoint is trusted and does not expose unexpected data or tools to external hosts.'
                 });
             }
+            if (oldServer) {
+                // An existing server keeping the same launch command but gaining
+                // secret-bearing env, auth headers, or a redirected cwd is a real
+                // permission change that serverCommand()-based diffing misses.
+                for (const change of sensitiveFieldChanges(oldServer, newServer)) {
+                    findings.push({
+                        kind: 'scope_trail.mcp_server_sensitive_field_changed',
+                        severity: change.secretLike ? 'high' : 'medium',
+                        file: config.path,
+                        line: newServer.line,
+                        subject: name,
+                        message: describeSensitiveFieldChange(name, change),
+                        recommendation: recommendationForSensitiveFieldChange(change)
+                    });
+                }
+            }
         }
     }
     for (const path of await listMcpSampleConfigPaths(oldRoot, newRoot)) {
@@ -208,9 +224,6 @@ async function readMcpServers(root, config) {
     const source = await readJsonObjectWithSource(configPath(root, config.path));
     const json = source.json;
     const rawServers = readServerMap(json, config.serverKeys);
-    if (!isRecord(rawServers)) {
-        return {};
-    }
     const servers = {};
     for (const [name, value] of Object.entries(rawServers)) {
         if (!isRecord(value)) {
@@ -222,7 +235,8 @@ async function readMcpServers(root, config) {
             command: typeof value.command === 'string' ? value.command : undefined,
             args: Array.isArray(value.args) ? value.args.filter((arg) => typeof arg === 'string') : undefined,
             url: typeof value.url === 'string' ? value.url : undefined,
-            serverUrl: typeof value.serverUrl === 'string' ? value.serverUrl : undefined
+            serverUrl: typeof value.serverUrl === 'string' ? value.serverUrl : undefined,
+            ...readSensitiveFields(value)
         };
     }
     return servers;
@@ -288,13 +302,27 @@ async function collectMcpSampleConfigPaths(root, relativeDir, paths) {
         }
     }));
 }
+// Some MCP config schemas expose servers under more than one key — Cursor
+// and VS Code both accept `mcpServers` and `servers`. The previous
+// first-recognized-map-wins logic let an empty `mcpServers: {}` shadow a
+// populated `servers: {}`, so every server under the second key was
+// invisible to the diff. Merge all recognized maps instead; on a name
+// collision the earlier key in `serverKeys` wins, since that order encodes
+// the schema's documented precedence.
 function readServerMap(json, serverKeys) {
+    const merged = {};
     for (const key of serverKeys) {
-        if (isRecord(json[key])) {
-            return json[key];
+        const map = json[key];
+        if (!isRecord(map)) {
+            continue;
+        }
+        for (const [name, value] of Object.entries(map)) {
+            if (!(name in merged)) {
+                merged[name] = value;
+            }
         }
     }
-    return undefined;
+    return merged;
 }
 function severityForSampleCommandRisk(server) {
     return isPipeToShellCommand(server) ? 'high' : 'medium';

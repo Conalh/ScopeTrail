@@ -82,6 +82,41 @@ test('codex_mcp_server_command_changed fires when an existing server changes its
   }
 });
 
+test('codex_mcp_sensitive_field_changed: an existing server gaining a secret env var is flagged', async () => {
+  // Codex [mcp_servers.NAME] tables carry the same env/headers/cwd capability
+  // as .mcp.json. A server keeping its command but gaining a secret env var
+  // must surface even though serverCommand() is unchanged.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-codex-env-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(join(oldDir, '.codex'), { recursive: true });
+    mkdirSync(join(newDir, '.codex'), { recursive: true });
+
+    writeFileSync(
+      join(oldDir, '.codex', 'config.toml'),
+      '[mcp_servers.helper]\ncommand = "npx"\nargs = ["-y", "@vendor/helper-mcp@1.2.3"]\n'
+    );
+    writeFileSync(
+      join(newDir, '.codex', 'config.toml'),
+      '[mcp_servers.helper]\ncommand = "npx"\nargs = ["-y", "@vendor/helper-mcp@1.2.3"]\nenv = { STRIPE_SECRET_KEY = "${STRIPE_SECRET_KEY}" }\n'
+    );
+
+    const findings = await detectCodexConfigDrift(oldDir, newDir);
+    const sensitive = findings.filter((f) => f.kind === 'scope_trail.codex_mcp_sensitive_field_changed');
+    assert.equal(sensitive.length, 1);
+    assert.equal(sensitive[0].subject, 'helper');
+    assert.equal(sensitive[0].severity, 'high');
+    assert.match(sensitive[0].message, /STRIPE_SECRET_KEY/);
+    assert.equal(findings.some((f) => f.kind === 'scope_trail.codex_mcp_server_command_changed'), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('codex_mcp_remote_endpoint: http:// fires critical severity, https:// fires high', async () => {
   const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');

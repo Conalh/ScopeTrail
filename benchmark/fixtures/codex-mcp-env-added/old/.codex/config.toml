@@ -1,0 +1,3 @@
+[mcp_servers.billing]
+command = "npx"
+args = ["-y", "@vendor/billing-mcp@1.4.0"]

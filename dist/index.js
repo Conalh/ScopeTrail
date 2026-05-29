@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { detectClaudeSettingsDrift } from './detectors/claude-settings.js';
@@ -33,7 +34,14 @@ async function runDiff(argv) {
     else {
         try {
             const baseSnapshot = await materializeGitSnapshot(parsed.repo, parsed.base);
-            const headSnapshot = await materializeGitSnapshot(parsed.repo, parsed.head);
+            // `cleanup` is only assigned once BOTH snapshots exist, so if head
+            // materialization fails (an unresolvable head ref, a max-buffer error)
+            // the base snapshot's temp dir would leak. Clean it explicitly before
+            // the error propagates to the handler below.
+            const headSnapshot = await materializeGitSnapshot(parsed.repo, parsed.head).catch(async (headError) => {
+                await baseSnapshot.cleanup();
+                throw headError;
+            });
             oldRoot = baseSnapshot.root;
             newRoot = headSnapshot.root;
             cleanup = async () => {
@@ -166,8 +174,25 @@ function parseDiffArgs(argv) {
 function isReportFormat(value) {
     return value === 'text' || value === 'markdown' || value === 'json' || value === 'github';
 }
-const invokedPath = process.argv[1] ? fileURLToPath(import.meta.url) === process.argv[1] : false;
-if (invokedPath) {
+// npm installs the `scopetrail` bin as a symlink (in node_modules/.bin and
+// the global bin dir). When launched through that symlink, `process.argv[1]`
+// is the symlink path while `import.meta.url` resolves to the real
+// dist/index.js — so a bare `===` is false, `main()` never runs, and the CLI
+// exits 0 with no output. For a CI gate that means silently passing every PR.
+// Resolve both sides through realpath before comparing so the bin runs whether
+// it is invoked directly (`node dist/index.js`) or via a symlink (`npx`/global).
+function isMainModule() {
+    if (!process.argv[1]) {
+        return false;
+    }
+    try {
+        return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+    }
+    catch {
+        return false;
+    }
+}
+if (isMainModule()) {
     process.exitCode = await main();
 }
 function usage() {

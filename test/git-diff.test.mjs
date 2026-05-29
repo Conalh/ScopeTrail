@@ -207,6 +207,47 @@ test('CLI surfaces a friendly error when a git ref cannot be resolved', async ()
   }
 });
 
+test('CLI cleans up the base snapshot when head materialization fails (no temp-dir leak)', async () => {
+  // Pre-fix gap: runDiff materialized base, then head, and only assigned
+  // `cleanup` after BOTH succeeded. If head failed (e.g. an unresolvable
+  // head ref — a shallow checkout missing it), the base snapshot's temp dir
+  // was already on disk and leaked. The existing "does-not-exist" test fails
+  // on the *base* ref, before any dir exists, so it never caught this.
+  const { readdir } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+
+  const snapshotDirs = async () =>
+    new Set((await readdir(tmpdir())).filter((name) => name.startsWith('scopetrail-snapshot-')));
+
+  const fx = await makeGitRepo({
+    prefix: 'scopetrail-git-leak-',
+    initialFiles: { '.mcp.json': '{"mcpServers":{}}\n' },
+    initialMessage: 'base',
+  });
+  try {
+    const before = await snapshotDirs();
+
+    let exitCode = 0;
+    try {
+      await execFileAsync(
+        process.execPath,
+        ['dist/index.js', 'diff', '--repo', fx.repo, '--base', 'HEAD', '--head', 'does-not-exist', '--format', 'json'],
+        { cwd: packageRoot }
+      );
+    } catch (error) {
+      exitCode = error.code ?? 0;
+    }
+    assert.equal(exitCode, 2, 'unresolvable head ref should exit 2');
+
+    // Only count dirs created by this run that survived it — robust to any
+    // snapshot dirs a sibling test left mid-flight.
+    const leaked = [...(await snapshotDirs())].filter((name) => !before.has(name));
+    assert.deepEqual(leaked, [], 'base snapshot temp dir must not leak when head materialization fails');
+  } finally {
+    await fx.cleanup();
+  }
+});
+
 test('CLI rejects git refs that could be parsed as git CLI flags', async () => {
   // Hardening: `execFile` blocks shell injection, but `git` re-parses
   // each positional arg against its own option table. A ref like

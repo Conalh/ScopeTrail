@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { lineOfTomlKey, parseToml } from 'agent-gov-core';
 import { configPath } from '../discovery.js';
-import { isUnpinnedCommand, serverCommand, remoteEndpoint, isUnencryptedEndpoint } from '../mcp-risk.js';
+import { isUnpinnedCommand, serverCommand, remoteEndpoint, isUnencryptedEndpoint, readSensitiveFields, sensitiveFieldChanges, describeSensitiveFieldChange, recommendationForSensitiveFieldChange } from '../mcp-risk.js';
 export const CODEX_CONFIG_FILE = '.codex/config.toml';
 export const CODEX_TARGET_PATHS = [CODEX_CONFIG_FILE];
 export async function detectCodexConfigDrift(oldRoot, newRoot) {
@@ -29,7 +29,7 @@ export async function detectCodexConfigDrift(oldRoot, newRoot) {
     for (const key of ['sandbox_mode', 'sandbox', 'windows.sandbox']) {
         const oldEntry = oldConfig.get(key);
         const newEntry = newConfig.get(key);
-        if (newEntry && sandboxRank(newEntry.value) > sandboxRank(oldEntry?.value)) {
+        if (newEntry && sandboxRank(newEntry.value) > baselineSandboxRank(oldEntry?.value)) {
             findings.push({
                 kind: 'scope_trail.codex_sandbox_widened',
                 severity: sandboxRank(newEntry.value) >= 3 ? 'critical' : 'high',
@@ -43,7 +43,7 @@ export async function detectCodexConfigDrift(oldRoot, newRoot) {
     }
     const oldApproval = oldConfig.get('approval_policy');
     const newApproval = newConfig.get('approval_policy');
-    if (newApproval && approvalRank(newApproval.value) > approvalRank(oldApproval?.value)) {
+    if (newApproval && approvalRank(newApproval.value) > baselineApprovalRank(oldApproval?.value)) {
         findings.push({
             kind: 'scope_trail.codex_approval_weakened',
             severity: newApproval.value === 'never' ? 'high' : 'medium',
@@ -205,6 +205,22 @@ async function detectCodexMcpDrift(oldRoot, newRoot) {
                     : 'Confirm the endpoint is trusted and does not expose unexpected data or tools to external hosts.'
             });
         }
+        if (oldServer) {
+            // Codex [mcp_servers.NAME] blocks carry the same env/headers/cwd
+            // capability as .mcp.json; an existing server gaining a secret-bearing
+            // env var with an unchanged command must still surface.
+            for (const change of sensitiveFieldChanges(oldServer, newServer)) {
+                findings.push({
+                    kind: 'scope_trail.codex_mcp_sensitive_field_changed',
+                    severity: change.secretLike ? 'high' : 'medium',
+                    file: CODEX_CONFIG_FILE,
+                    line: lineForServer(newServer),
+                    subject: name,
+                    message: describeSensitiveFieldChange(name, change),
+                    recommendation: recommendationForSensitiveFieldChange(change)
+                });
+            }
+        }
     }
     return findings;
 }
@@ -246,7 +262,8 @@ async function readCodexMcpServers(root) {
             url: typeof entry.url === 'string' ? entry.url : undefined,
             serverUrl: typeof entry.serverUrl === 'string'
                 ? entry.serverUrl
-                : (typeof entry.server_url === 'string' ? entry.server_url : undefined)
+                : (typeof entry.server_url === 'string' ? entry.server_url : undefined),
+            ...readSensitiveFields(entry)
         });
     }
     return servers;
@@ -327,6 +344,24 @@ function stringifyScalar(value) {
         return value.toLowerCase();
     }
     return String(value).toLowerCase();
+}
+// When a sandbox/approval key is absent in the base config (or carries an
+// unrecognized value), Codex falls back to its safe default posture: a
+// read-only sandbox and untrusted approval — the narrowest settings. The
+// previous comparison ranked a missing baseline at -1, so a brand-new config
+// that merely set `sandbox_mode = "read-only"` or `approval_policy =
+// "untrusted"` reported the *narrowest* values as a widening/weakening — a
+// high-severity false positive on the safest possible config. Anchoring the
+// baseline at the safe default means only settings genuinely wider than that
+// default surface, while a brand-new `danger-full-access` sandbox or `never`
+// approval introduced from no prior config still fires.
+function baselineSandboxRank(value) {
+    const rank = sandboxRank(value);
+    return rank === -1 ? sandboxRank('read-only') : rank;
+}
+function baselineApprovalRank(value) {
+    const rank = approvalRank(value);
+    return rank === -1 ? approvalRank('untrusted') : rank;
 }
 function sandboxRank(value) {
     if (!value) {

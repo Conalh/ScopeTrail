@@ -134,7 +134,7 @@ ScopeTrail permission drift: CRITICAL
 
 ## How it works
 
-ScopeTrail is **local-only**. It reads the checked-out repository, materializes the two git refs into temp directories, runs detectors over them, and prints the result. It uploads nothing, calls no external services, and has no required API keys.
+ScopeTrail is **local-only**. It reads the checked-out repository, materializes the two git refs into temp directories, runs detectors over them, and prints the result. The scanner uploads nothing — no repository contents, findings, or telemetry leave your machine — and it needs no API keys. (The GitHub Action's setup step installs ScopeTrail's one runtime dependency with `npm ci` from the npm registry; the analysis itself makes no network calls.)
 
 The detectors cover the surfaces an AI agent can actually escalate through:
 
@@ -146,20 +146,20 @@ Findings carry a `severity` (`low` / `medium` / `high` / `critical`) and the rep
 
 ## How well it catches it
 
-ScopeTrail ships a labeled precision/recall benchmark over **28 fixture PRs** (22 with planted drift, 6 benign) spanning **19 detector kinds**. Each fixture is an `old/`+`new/` config snapshot pair; ground truth is fixed by fixture design and the harness diffs the pair and scores the drift engine against it. Reproduce with `npm run build && node benchmark/run-benchmark.mjs`.
+ScopeTrail ships a labeled precision/recall benchmark over **35 fixture PRs** (27 with planted drift, 8 benign) spanning **21 detector kinds**. Each fixture is an `old/`+`new/` config snapshot pair; ground truth is fixed by fixture design and the harness diffs the pair and scores the drift engine against it. Reproduce with `npm run build && node benchmark/run-benchmark.mjs`. These figures score the engine against its own labeled fixtures — they bound regressions, not a claim of real-world field accuracy across every config a PR might contain.
 
 | Metric | Result |
 | --- | --- |
-| Detection (any finding) — recall | **100%** (22/22 rogue PRs flagged) |
-| Detection — false-positive rate | **0%** (0/6 benign PRs flagged) |
+| Detection (any finding) — recall | **100%** (27/27 rogue PRs flagged) |
+| Detection — false-positive rate | **0%** (0/8 benign PRs flagged) |
 | Detection — precision | **100%** |
-| Correct primary finding kind | **22/22** rogue PRs |
-| All expected finding kinds | **22/22** rogue PRs |
-| Exact consolidated rating | **28/28** PRs |
+| Correct primary finding kind | **27/27** rogue PRs |
+| All expected finding kinds | **27/27** rogue PRs |
+| Exact consolidated rating | **35/35** PRs |
 
-The 6 benign cases include five engineered **false-positive traps** — narrowly-scoped Claude grants (a textual diff sees new `allow` lines), an all-tightening Codex posture, network access that was *already* on, a removed MCP server, and a `.mcp.json` with reordered keys but an identical launch command — plus one byte-identical snapshot. None produce a finding, because the detectors compare semantics and flag only *widening*.
+The 8 benign cases include seven engineered **false-positive traps** — narrowly-scoped Claude grants (a textual diff sees new `allow` lines), an all-tightening Codex posture, network access that was *already* on, a brand-new Codex config pinned to the narrowest posture, a dropped MCP `env` var, a removed MCP server, and a `.mcp.json` with reordered keys but an identical launch command — plus one byte-identical snapshot. None produce a finding, because the detectors compare semantics and flag only *widening*.
 
-**Severity is calibrated, not maximized.** At a strict `fail-on: high` gate, recall is 82% — by design: sample/template MCP additions, pinned version bumps, broad `Read` allows, and newly-enabled Codex network access sit at `low`/`medium` because they widen the surface without being directly exploitable. The `high`/`critical` band is reserved for executable or secret-facing changes — a bare `Bash` grant, a removed `Read(.env)` deny, a `danger-full-access` sandbox, an unencrypted remote MCP endpoint. Full confusion matrix at every gate, per-category and per-case breakdowns: [benchmark/RESULTS.md](benchmark/RESULTS.md). Methodology and labels: [benchmark/labels.json](benchmark/labels.json).
+**Severity is calibrated, not maximized.** At a strict `fail-on: high` gate, recall is 85% — by design: sample/template MCP additions, pinned version bumps, broad `Read` allows, and newly-enabled Codex network access sit at `low`/`medium` because they widen the surface without being directly exploitable. The `high`/`critical` band is reserved for executable or secret-facing changes — a bare `Bash` grant, a removed `Read(.env)` deny, a `danger-full-access` sandbox, an unencrypted remote MCP endpoint. Full confusion matrix at every gate, per-category and per-case breakdowns: [benchmark/RESULTS.md](benchmark/RESULTS.md). Methodology and labels: [benchmark/labels.json](benchmark/labels.json).
 
 ## Design choices worth flagging
 

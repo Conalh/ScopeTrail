@@ -71,7 +71,7 @@ export async function detectClaudeSettingsDrift(oldRoot, newRoot) {
                 file: CLAUDE_SETTINGS_FILE,
                 subject: hookName,
                 message: hookCommandChangeMessage(hookName, added, removed),
-                recommendation: 'Review the change — a removed guard, a no-op appended next to a strict one, or any rewrite of a hook command can all weaken policy.'
+                recommendation: 'Review the change — a removed guard, a no-op appended next to a strict one, a matcher rebound to a different tool, or any rewrite of a hook command can all weaken policy.'
             });
         }
     }
@@ -109,35 +109,54 @@ async function readClaudeSettings(root) {
 //   { "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command",
 //                       "command": "/path/guard.sh" }] }] }
 //
-// We collect every command string per hook name so a PR can be checked
-// for both presence and content changes.
+// The matcher is part of a hook's enforcement identity: a guard bound to
+// `Bash` that is rebound to `Read` keeps the same command but stops guarding
+// Bash — a real change in enforcement surface. So we key each entry by a
+// (matcher, type, command) signature rather than the command string alone; a
+// matcher/type rebinding then surfaces as a removed entry plus an added entry,
+// exactly as a command swap does. Reordering an identical set still produces
+// nothing, because set membership is order-independent.
 function readHookCommands(hooks) {
     const result = new Map();
     for (const [name, value] of Object.entries(hooks)) {
         if (!hookHasEntries(value)) {
             continue;
         }
-        const commands = new Set();
+        const signatures = new Set();
         const entries = Array.isArray(value) ? value : Object.values(value);
         for (const entry of entries) {
             if (!isRecord(entry)) {
                 continue;
             }
+            const matcher = typeof entry.matcher === 'string' ? entry.matcher : '';
             const innerList = entry.hooks;
             if (Array.isArray(innerList)) {
                 for (const inner of innerList) {
                     if (isRecord(inner) && typeof inner.command === 'string') {
-                        commands.add(inner.command);
+                        signatures.add(hookEntrySignature(matcher, typeof inner.type === 'string' ? inner.type : '', inner.command));
                     }
                 }
             }
             if (typeof entry.command === 'string') {
-                commands.add(entry.command);
+                signatures.add(hookEntrySignature(matcher, typeof entry.type === 'string' ? entry.type : '', entry.command));
             }
         }
-        result.set(name, commands);
+        result.set(name, signatures);
     }
     return result;
+}
+// Stable, human-readable identity for a hook entry. The command leads so the
+// added/removed message stays scannable (`added: /noop.sh [matcher=Bash, ...]`);
+// the matcher/type qualifiers are what make a rebinding visible in the diff.
+function hookEntrySignature(matcher, type, command) {
+    const qualifiers = [];
+    if (matcher) {
+        qualifiers.push(`matcher=${matcher}`);
+    }
+    if (type) {
+        qualifiers.push(`type=${type}`);
+    }
+    return qualifiers.length > 0 ? `${command} [${qualifiers.join(', ')}]` : command;
 }
 function readStringArray(value) {
     return Array.isArray(value) ? value.filter((entry) => typeof entry === 'string') : [];
@@ -234,12 +253,23 @@ function severityForAllow(permission) {
     }
     return 'medium';
 }
+// Removing a deny rule that guards secrets or keys is critical — the PR is
+// re-opening agent access to material a reviewer almost never wants read or
+// exfiltrated. The previous set only caught .env/secret/credential/.pem, so
+// removing a deny on SSH keys, cloud credentials, package-registry tokens, or
+// kube configs silently downgraded to medium. Substring matching is
+// intentional so glob forms (`Read(~/.ssh/**)`, `Read(*.key)`) still match.
+const CRITICAL_DENY_PATTERNS = [
+    '.env', 'secret', 'credential', '.pem',
+    '.ssh', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', '.key',
+    '.npmrc', '.pypirc', '.netrc',
+    'kubeconfig', '.kube',
+    '.aws', '.gcp', '.azure',
+    '.p12', '.pfx'
+];
 function severityForRemovedDeny(permission) {
     const normalized = permission.toLowerCase();
-    if (normalized.includes('.env') || normalized.includes('secret') || normalized.includes('credential') || normalized.includes('.pem')) {
-        return 'critical';
-    }
-    return 'medium';
+    return CRITICAL_DENY_PATTERNS.some((pattern) => normalized.includes(pattern)) ? 'critical' : 'medium';
 }
 function isHighImpactHook(hookName) {
     return ['pretooluse', 'posttooluse', 'permissionrequest', 'sessionend'].includes(hookName.toLowerCase());
@@ -252,5 +282,5 @@ function hookCommandChangeMessage(hookName, added, removed) {
     if (removed.length > 0) {
         parts.push(`removed: ${removed.join(', ')}`);
     }
-    return `Claude hook "${hookName}" command(s) changed (${parts.join('; ')}).`;
+    return `Claude hook "${hookName}" entries changed (${parts.join('; ')}).`;
 }

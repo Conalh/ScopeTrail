@@ -116,6 +116,32 @@ test('Claude detector: bare Bash/Write/Edit get high severity (not medium)', asy
   }
 });
 
+test('Claude detector: removing a deny on SSH keys / cloud creds / registry tokens is critical', async () => {
+  // Pre-fix gap: only .env/secret/credential/.pem escalated to critical, so
+  // removing a deny on ~/.ssh, *.key, .npmrc, or kubeconfig downgraded the
+  // re-opened secret access to a mere medium.
+  const dir = await makeClaudeFixture(
+    {
+      permissions: {
+        allow: [],
+        deny: ['Read(~/.ssh/**)', 'Read(*.key)', 'Read(.npmrc)', 'Read(kubeconfig)', 'Read(.aws/credentials)']
+      },
+      hooks: {}
+    },
+    { permissions: { allow: [], deny: [] }, hooks: {} }
+  );
+  try {
+    const findings = await detectClaudeSettingsDrift(dir.oldRoot, dir.newRoot);
+    const removed = findings.filter((f) => f.kind === 'scope_trail.permission_deny_removed');
+    assert.equal(removed.length, 5);
+    for (const f of removed) {
+      assert.equal(f.severity, 'critical', `removed deny ${f.subject} should be critical`);
+    }
+  } finally {
+    await rm(dir.root, { recursive: true, force: true });
+  }
+});
+
 test('isBroadAllow: narrowly-scoped Bash/Read/Write/Edit stay narrow', () => {
   // The bare-verb fix must not over-fire on legitimate narrow scopes.
   assert.equal(isBroadAllow('Bash(npm test)'), false);
@@ -238,10 +264,39 @@ test('Claude detector: hook_command_changed fires when one guard is removed from
   }
 });
 
-test('Claude detector: hook with unchanged command set produces no hook_command_changed finding', async () => {
-  // Regression guard for the symmetric-difference logic — same set of
-  // commands in a different order or wrapped under a different matcher
-  // should not generate noise.
+test('Claude detector: reordered but identical hook entries produce no hook_command_changed finding', async () => {
+  // Regression guard for the symmetric-difference logic — the same set of
+  // (matcher, type, command) entries in a different array order is not drift.
+  const dir = await makeClaudeFixture(
+    {
+      permissions: { allow: [], deny: [] },
+      hooks: { PreToolUse: [
+        { matcher: 'Bash', hooks: [{ type: 'command', command: '/guard.sh' }] },
+        { matcher: 'Edit', hooks: [{ type: 'command', command: '/audit.sh' }] }
+      ] }
+    },
+    {
+      permissions: { allow: [], deny: [] },
+      hooks: { PreToolUse: [
+        { matcher: 'Edit', hooks: [{ type: 'command', command: '/audit.sh' }] },
+        { matcher: 'Bash', hooks: [{ type: 'command', command: '/guard.sh' }] }
+      ] }
+    }
+  );
+  try {
+    const findings = await detectClaudeSettingsDrift(dir.oldRoot, dir.newRoot);
+    assert.equal(findings.find((f) => f.kind === 'scope_trail.hook_command_changed'), undefined);
+  } finally {
+    await rm(dir.root, { recursive: true, force: true });
+  }
+});
+
+test('Claude detector: hook_command_changed fires when a matcher rebinds the same guard to a different tool', async () => {
+  // A PreToolUse guard bound to `Bash` that is rebound to `Read` keeps the
+  // same command but stops guarding Bash — a real change in enforcement
+  // surface, not noise. Because the entry identity includes the matcher, the
+  // rebinding surfaces as a removed Bash-bound entry plus an added Read-bound
+  // one. (This reverses the earlier "matcher change is noise" behavior.)
   const dir = await makeClaudeFixture(
     {
       permissions: { allow: [], deny: [] },
@@ -249,12 +304,17 @@ test('Claude detector: hook with unchanged command set produces no hook_command_
     },
     {
       permissions: { allow: [], deny: [] },
-      hooks: { PreToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: '/guard.sh' }] }] }
+      hooks: { PreToolUse: [{ matcher: 'Read', hooks: [{ type: 'command', command: '/guard.sh' }] }] }
     }
   );
   try {
     const findings = await detectClaudeSettingsDrift(dir.oldRoot, dir.newRoot);
-    assert.equal(findings.find((f) => f.kind === 'scope_trail.hook_command_changed'), undefined);
+    const changed = findings.find((f) => f.kind === 'scope_trail.hook_command_changed');
+    assert.ok(changed, 'matcher rebinding (Bash -> Read) must be flagged');
+    assert.equal(changed.subject, 'PreToolUse');
+    assert.equal(changed.severity, 'high'); // PreToolUse is high-impact
+    assert.match(changed.message, /matcher=Bash/);
+    assert.match(changed.message, /matcher=Read/);
   } finally {
     await rm(dir.root, { recursive: true, force: true });
   }
