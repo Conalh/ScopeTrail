@@ -100,12 +100,12 @@ Text output against the bundled `test/fixtures/combined` fixture:
 
 ```
 ScopeTrail permission drift: CRITICAL
-[HIGH]     stripe-admin: MCP server "stripe-admin" was added.
-[HIGH]     stripe-admin: MCP server "stripe-admin" uses an unpinned command: npx -y @vendor/stripe-mcp@latest.
-[HIGH]     Bash(npm *):  Claude permission allowlist now includes broad access: Bash(npm *).
-[MEDIUM]   Read(~/**):   Claude permission allowlist now includes broad access: Read(~/**).
-[CRITICAL] Read(.env):   Claude permission deny rule was removed: Read(.env).
-[HIGH]     PreToolUse:   Claude hook "PreToolUse" was removed.
+[HIGH] stripe-admin: MCP server "stripe-admin" was added.
+[HIGH] stripe-admin: MCP server "stripe-admin" uses an unpinned command: npx -y @vendor/stripe-mcp@latest.
+[HIGH] Bash(npm *): Claude permission allowlist now includes broad access: Bash(npm *).
+[MEDIUM] Read(~/**): Claude permission allowlist now includes broad access: Read(~/**).
+[CRITICAL] Read(.env): Claude permission deny rule was removed: Read(.env).
+[HIGH] PreToolUse: Claude hook "PreToolUse" was removed.
 ```
 
 `--format json` emits the canonical [agent-gov-core](https://github.com/Conalh/agent-gov-core) `Report` envelope so cross-tool reviewers like GovVerdict can merge findings across the suite:
