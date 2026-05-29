@@ -62,7 +62,7 @@ test('adoption checklist defines advisory-first rollout and feedback path', asyn
 
   assert.match(adoption, /Install ScopeTrail with `fail-on: none`/);
   assert.match(adoption, /Run it for 3-5 pull requests/);
-  assert.match(adoption, /warning annotations and step summaries/i);
+  assert.match(adoption, /inline annotations and step summaries/i);
   assert.match(adoption, /false-positive report/i);
   assert.match(adoption, /missing-surface request/i);
   assert.match(adoption, /raise `fail-on`/i);

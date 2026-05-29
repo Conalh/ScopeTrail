@@ -135,7 +135,7 @@ test('Markdown render escapes config-controlled strings against injection', asyn
   }
 });
 
-test('CLI emits GitHub warning annotations for permission drift findings', async () => {
+test('CLI emits severity-aware GitHub annotations for permission drift findings', async () => {
   const oldDir = join(testDir, 'fixtures', 'combined', 'old');
   const newDir = join(testDir, 'fixtures', 'combined', 'new');
 
@@ -147,13 +147,16 @@ test('CLI emits GitHub warning annotations for permission drift findings', async
 
   const lines = stdout.trim().split('\n');
   assert.equal(lines.length, 6);
-  assert.match(lines[0], /^::warning file=.mcp.json,line=7,title=ScopeTrail high permission drift::/);
-  assert.match(stdout, /file=.mcp.json,line=9,title=ScopeTrail high permission drift/);
-  assert.match(stdout, /file=.claude\/settings.json,line=3,title=ScopeTrail high permission drift/);
+  // high/critical findings escalate to ::error to match agent-gov-core's
+  // annotation contract; medium/low stay ::warning.
+  assert.match(lines[0], /^::error file=.mcp.json,line=7,title=ScopeTrail high permission drift::/);
+  assert.match(stdout, /::error file=.mcp.json,line=9,title=ScopeTrail high permission drift/);
+  assert.match(stdout, /::error file=.claude\/settings.json,line=3,title=ScopeTrail high permission drift/);
+  assert.match(stdout, /::error file=.claude\/settings.json,title=ScopeTrail critical permission drift/);
+  assert.match(stdout, /::warning file=.claude\/settings.json,line=3,title=ScopeTrail medium permission drift/);
   assert.match(stdout, /stripe-admin/);
   assert.match(stdout, /Bash\(npm \*\)/);
   assert.match(stdout, /Read\(.env\)/);
-  assert.doesNotMatch(stdout, /::error/);
 });
 
 test('CLI --fail-on exits 1 when rating meets the threshold (and 0 below it)', async () => {
@@ -231,7 +234,7 @@ test('CLI renders markdown and JSON to files alongside stdout annotations in a s
 
     // stdout still carries the GitHub annotation format the Actions
     // runner expects, identical to the single `--format github` run.
-    assert.match(stdout, /^::warning file=.mcp.json/);
+    assert.match(stdout, /^::error file=.mcp.json/);
     assert.doesNotMatch(stdout, /^# ScopeTrail/m);
 
     // Markdown file matches what `--format markdown` would have

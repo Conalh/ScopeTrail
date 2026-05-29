@@ -12,7 +12,7 @@ In GitHub Actions, `fetch-depth: 0` is required so ScopeTrail can compare the pu
 
 ## What It Writes
 
-ScopeTrail writes a Markdown report to the GitHub Actions step summary, emits PR-visible warning annotations, and exposes `rating` and `finding-count` outputs from the Action step.
+ScopeTrail writes a Markdown report to the GitHub Actions step summary, emits PR-visible annotations (errors for `high`/`critical` drift, warnings otherwise), and exposes `rating` and `finding-count` outputs from the Action step.
 
 ## Data Uploads
 

@@ -23,14 +23,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Conalh/ScopeTrail@v0.2.0
+      - uses: Conalh/ScopeTrail@v0.3.0
         with:
           fail-on: none
 ```
 
 ## Trial Window
 
-Run ScopeTrail on 3-5 pull requests before deciding whether it should stay installed. Review the GitHub Action step summary and PR-visible warning annotations with the people who own AI-agent config changes.
+Run ScopeTrail on 3-5 pull requests before deciding whether it should stay installed. Review the GitHub Action step summary and PR-visible annotations with the people who own AI-agent config changes.
 
 Useful checks during the trial:
 

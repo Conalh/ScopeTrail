@@ -47,7 +47,7 @@ Live demo PR: [Demo: risky agent permission drift](https://github.com/Conalh/Sco
 
 That PR intentionally adds a new `stripe-admin` MCP server, an unpinned `@latest` MCP package, and broad Claude Code rules: `Bash(npm *)` and `Read(~/**)`.
 
-ScopeTrail reports `HIGH` permission drift and emits GitHub warning annotations on the risky config lines.
+ScopeTrail reports `HIGH` permission drift and emits GitHub error annotations on the risky config lines.
 
 ![ScopeTrail PR annotations showing risky Claude and MCP config changes](assets/demo-pr-annotations.png)
 
@@ -77,12 +77,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0      # required: ScopeTrail compares base..head
-      - uses: Conalh/ScopeTrail@v0.2.0
+      - uses: Conalh/ScopeTrail@v0.3.0
         with:
           fail-on: none       # start advisory; raise to high/critical later
 ```
 
-The Action writes a Markdown report to the GitHub step summary and emits PR-visible warning annotations on the exact config lines that drifted.
+The Action writes a Markdown report to the GitHub step summary and emits PR-visible annotations on the exact config lines that drifted — errors for `high`/`critical` drift, warnings otherwise.
 
 Pilot ScopeTrail in a real repository and share team feedback in the [active pilot issue](https://github.com/Conalh/ScopeTrail/issues/18).
 
@@ -167,7 +167,7 @@ CLI:
 | `--out-json <path>` | Also write the canonical JSON report to this path. |
 | `--fail-on <rating>` | Exit 1 when rating >= `low` / `medium` / `high` / `critical`. Default `none`. |
 
-GitHub Action inputs (`Conalh/ScopeTrail@v0.2.0`):
+GitHub Action inputs (`Conalh/ScopeTrail@v0.3.0`):
 
 | Input | Default | Description |
 | --- | --- | --- |

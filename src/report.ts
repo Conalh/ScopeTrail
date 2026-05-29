@@ -188,6 +188,8 @@ function renderGithubAnnotations(report: DriftReport): string {
 
   return report.findings
     .map((finding) => {
+      const level =
+        finding.severity === 'critical' || finding.severity === 'high' ? 'error' : 'warning';
       const title = `ScopeTrail ${finding.severity} permission drift`;
       const message = `${finding.message} Recommendation: ${finding.recommendation}`;
       const properties = [`file=${escapeProperty(finding.file)}`];
@@ -195,7 +197,7 @@ function renderGithubAnnotations(report: DriftReport): string {
         properties.push(`line=${finding.line}`);
       }
       properties.push(`title=${escapeProperty(title)}`);
-      return `::warning ${properties.join(',')}::${escapeMessage(message)}`;
+      return `::${level} ${properties.join(',')}::${escapeMessage(message)}`;
     })
     .join('\n') + '\n';
 }

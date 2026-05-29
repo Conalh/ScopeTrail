@@ -5,7 +5,7 @@ Use this checklist when trying ScopeTrail in a real repository. For a copy-paste
 1. Install ScopeTrail with `fail-on: none`.
 2. Use `actions/checkout` with `fetch-depth: 0`.
 3. Run it for 3-5 pull requests before considering a blocking threshold.
-4. Review warning annotations and step summaries with the developers who own AI-agent config changes.
+4. Review inline annotations and step summaries with the developers who own AI-agent config changes.
 5. Open a [false-positive report](https://github.com/Conalh/ScopeTrail/issues/new?template=false-positive.yml) for noisy findings.
 6. Open a [missing-surface request](https://github.com/Conalh/ScopeTrail/issues/new?template=missing-surface.yml) for unsupported agent config files.
 7. Open a [team-adoption signal](https://github.com/Conalh/ScopeTrail/issues/new?template=team-adoption.yml) if the pain is about ownership, reporting, exceptions, or many repositories.
