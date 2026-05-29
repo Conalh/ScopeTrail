@@ -126,6 +126,67 @@ test('inline-table sandbox/network keys are detected (parsed TOML, not regex)', 
   }
 });
 
+test('codex baseline: a brand-new config at the narrowest posture is not flagged as widening', async () => {
+  // Pre-fix gap: a missing base value ranked at -1, so adding a fresh
+  // .codex/config.toml whose sandbox/approval were the *narrowest*
+  // settings (read-only sandbox, untrusted approval) reported them as
+  // widened/weakened — a high-severity false positive on the safest
+  // possible config. The baseline now anchors at Codex's safe default.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-codex-baseline-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    // No .codex/config.toml in the base at all.
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(join(newDir, '.codex'), { recursive: true });
+    writeFileSync(
+      join(newDir, '.codex', 'config.toml'),
+      'sandbox_mode = "read-only"\napproval_policy = "untrusted"\n'
+    );
+
+    const findings = await detectCodexConfigDrift(oldDir, newDir);
+    assert.deepEqual(findings, [], 'narrowest settings in a brand-new config must not flag');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('codex baseline: a brand-new config that introduces a wide posture is still flagged', async () => {
+  // The baseline anchor must not over-suppress: introducing a
+  // danger-full-access sandbox or `never` approval where the base had no
+  // .codex/config.toml is a genuine permission event, not a false positive.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-codex-baseline-wide-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(join(newDir, '.codex'), { recursive: true });
+    writeFileSync(
+      join(newDir, '.codex', 'config.toml'),
+      'sandbox_mode = "danger-full-access"\napproval_policy = "never"\n'
+    );
+
+    const findings = await detectCodexConfigDrift(oldDir, newDir);
+    const byKind = (kind) => findings.find((f) => f.kind === kind);
+
+    const sandbox = byKind('scope_trail.codex_sandbox_widened');
+    assert.ok(sandbox, 'full-access sandbox introduced from no baseline must still flag');
+    assert.equal(sandbox.severity, 'critical');
+    assert.ok(
+      byKind('scope_trail.codex_approval_weakened'),
+      'never approval introduced from no baseline must still flag'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('detects Codex config permission drift', async () => {
   const oldDir = join(testDir, 'fixtures', 'codex-config-drift', 'old');
   const newDir = join(testDir, 'fixtures', 'codex-config-drift', 'new');

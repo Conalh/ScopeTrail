@@ -50,7 +50,7 @@ export async function detectCodexConfigDrift(oldRoot: string, newRoot: string): 
   for (const key of ['sandbox_mode', 'sandbox', 'windows.sandbox']) {
     const oldEntry = oldConfig.get(key);
     const newEntry = newConfig.get(key);
-    if (newEntry && sandboxRank(newEntry.value) > sandboxRank(oldEntry?.value)) {
+    if (newEntry && sandboxRank(newEntry.value) > baselineSandboxRank(oldEntry?.value)) {
       findings.push({
         kind: 'scope_trail.codex_sandbox_widened',
         severity: sandboxRank(newEntry.value) >= 3 ? 'critical' : 'high',
@@ -65,7 +65,7 @@ export async function detectCodexConfigDrift(oldRoot: string, newRoot: string): 
 
   const oldApproval = oldConfig.get('approval_policy');
   const newApproval = newConfig.get('approval_policy');
-  if (newApproval && approvalRank(newApproval.value) > approvalRank(oldApproval?.value)) {
+  if (newApproval && approvalRank(newApproval.value) > baselineApprovalRank(oldApproval?.value)) {
     findings.push({
       kind: 'scope_trail.codex_approval_weakened',
       severity: newApproval.value === 'never' ? 'high' : 'medium',
@@ -374,6 +374,26 @@ function stringifyScalar(value: unknown): string {
     return value.toLowerCase();
   }
   return String(value).toLowerCase();
+}
+
+// When a sandbox/approval key is absent in the base config (or carries an
+// unrecognized value), Codex falls back to its safe default posture: a
+// read-only sandbox and untrusted approval — the narrowest settings. The
+// previous comparison ranked a missing baseline at -1, so a brand-new config
+// that merely set `sandbox_mode = "read-only"` or `approval_policy =
+// "untrusted"` reported the *narrowest* values as a widening/weakening — a
+// high-severity false positive on the safest possible config. Anchoring the
+// baseline at the safe default means only settings genuinely wider than that
+// default surface, while a brand-new `danger-full-access` sandbox or `never`
+// approval introduced from no prior config still fires.
+function baselineSandboxRank(value: string | undefined): number {
+  const rank = sandboxRank(value);
+  return rank === -1 ? sandboxRank('read-only') : rank;
+}
+
+function baselineApprovalRank(value: string | undefined): number {
+  const rank = approvalRank(value);
+  return rank === -1 ? approvalRank('untrusted') : rank;
 }
 
 function sandboxRank(value: string | undefined): number {

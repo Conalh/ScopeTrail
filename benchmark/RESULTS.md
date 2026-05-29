@@ -8,11 +8,11 @@ the pair and scores the drift engine against it. Benign cases include deliberate
 false-positive traps a naive textual diff would flag (tightened posture, removed
 servers, reordered JSON keys).
 
-- Cases: **28** (22 rogue, 6 benign) across **19** detector kinds
+- Cases: **29** (22 rogue, 7 benign) across **19** detector kinds
 - Detection (any finding): recall **100.0%**, false-positive rate **0.0%**, precision **100.0%**
 - At a `fail-on: high` CI gate: recall **81.8%**, false-positive rate **0.0%**, precision **100.0%**
 - Correct primary finding kind identified on **22/22** rogue cases; all expected kinds on **22/22**
-- Exact rating match where the label pins one: **28/28**
+- Exact rating match where the label pins one: **29/29**
 
 ## Confusion matrix by CI gate threshold
 
@@ -20,10 +20,10 @@ A PR is predicted "drift" when its overall rating meets the threshold. `low` = a
 
 | Gate (`fail-on`) | TP | FP | FN | TN | Precision | Recall | FP rate | F1 | Accuracy |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| low | 22 | 0 | 0 | 6 | 100.0% | 100.0% | 0.0% | 100.0% | 100.0% |
-| medium | 21 | 0 | 1 | 6 | 100.0% | 95.5% | 0.0% | 97.7% | 96.4% |
-| high | 18 | 0 | 4 | 6 | 100.0% | 81.8% | 0.0% | 90.0% | 85.7% |
-| critical | 4 | 0 | 18 | 6 | 100.0% | 18.2% | 0.0% | 30.8% | 35.7% |
+| low | 22 | 0 | 0 | 7 | 100.0% | 100.0% | 0.0% | 100.0% | 100.0% |
+| medium | 21 | 0 | 1 | 7 | 100.0% | 95.5% | 0.0% | 97.7% | 96.6% |
+| high | 18 | 0 | 4 | 7 | 100.0% | 81.8% | 0.0% | 90.0% | 86.2% |
+| critical | 4 | 0 | 18 | 7 | 100.0% | 18.2% | 0.0% | 30.8% | 37.9% |
 
 ## Detector-kind identification (rogue cases)
 
@@ -33,7 +33,7 @@ A PR is predicted "drift" when its overall rating meets the threshold. `low` = a
 
 ## Rating agreement
 
-Of the **28** cases whose label pins an exact consolidated rating, the diff matched **28**.
+Of the **29** cases whose label pins an exact consolidated rating, the diff matched **29**.
 
 ## Results by category
 
@@ -42,7 +42,7 @@ Of the **28** cases whose label pins an exact consolidated rating, the diff matc
 | claude-drift | 5 | 5/5 | — |
 | clean | 1 | — | 1/1 |
 | codex-drift | 6 | 6/6 | — |
-| fp-guard | 5 | — | 5/5 |
+| fp-guard | 6 | — | 6/6 |
 | mcp-drift | 5 | 5/5 | — |
 | mcp-sample | 2 | 2/2 | — |
 | multi-class | 1 | 1/1 | — |
@@ -82,6 +82,7 @@ None. Every rogue case produced all of its expected finding kinds, no benign cas
 | claude-scoped-grants | benign | fp-guard | none | 0 | — | — | yes |
 | codex-narrowed | benign | fp-guard | none | 0 | — | — | yes |
 | codex-network-already-on | benign | fp-guard | none | 0 | — | — | yes |
+| codex-baseline-narrowest | benign | fp-guard | none | 0 | — | — | yes |
 | mcp-server-removed | benign | fp-guard | none | 0 | — | — | yes |
 | mcp-reformatted | benign | fp-guard | none | 0 | — | — | yes |
 
