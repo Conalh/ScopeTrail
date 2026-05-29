@@ -34,7 +34,14 @@ async function runDiff(argv) {
     else {
         try {
             const baseSnapshot = await materializeGitSnapshot(parsed.repo, parsed.base);
-            const headSnapshot = await materializeGitSnapshot(parsed.repo, parsed.head);
+            // `cleanup` is only assigned once BOTH snapshots exist, so if head
+            // materialization fails (an unresolvable head ref, a max-buffer error)
+            // the base snapshot's temp dir would leak. Clean it explicitly before
+            // the error propagates to the handler below.
+            const headSnapshot = await materializeGitSnapshot(parsed.repo, parsed.head).catch(async (headError) => {
+                await baseSnapshot.cleanup();
+                throw headError;
+            });
             oldRoot = baseSnapshot.root;
             newRoot = headSnapshot.root;
             cleanup = async () => {
