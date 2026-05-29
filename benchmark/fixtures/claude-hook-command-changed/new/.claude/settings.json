@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__github__get_issue"
+    ],
+    "deny": [
+      "Read(.env)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./guard.sh --skip"
+          }
+        ]
+      }
+    ]
+  }
+}

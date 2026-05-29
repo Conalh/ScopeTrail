@@ -1,0 +1,2 @@
+network_access = true
+model = "gpt-5-codex"

@@ -144,6 +144,23 @@ The detectors cover the surfaces an AI agent can actually escalate through:
 
 Findings carry a `severity` (`low` / `medium` / `high` / `critical`) and the report's overall `rating` is the max severity across findings. `--fail-on` gates CI on that rating.
 
+## How well it catches it
+
+ScopeTrail ships a labeled precision/recall benchmark over **28 fixture PRs** (22 with planted drift, 6 benign) spanning **19 detector kinds**. Each fixture is an `old/`+`new/` config snapshot pair; ground truth is fixed by fixture design and the harness diffs the pair and scores the drift engine against it. Reproduce with `npm run build && node benchmark/run-benchmark.mjs`.
+
+| Metric | Result |
+| --- | --- |
+| Detection (any finding) — recall | **100%** (22/22 rogue PRs flagged) |
+| Detection — false-positive rate | **0%** (0/6 benign PRs flagged) |
+| Detection — precision | **100%** |
+| Correct primary finding kind | **22/22** rogue PRs |
+| All expected finding kinds | **22/22** rogue PRs |
+| Exact consolidated rating | **28/28** PRs |
+
+The 6 benign cases include five engineered **false-positive traps** — narrowly-scoped Claude grants (a textual diff sees new `allow` lines), an all-tightening Codex posture, network access that was *already* on, a removed MCP server, and a `.mcp.json` with reordered keys but an identical launch command — plus one byte-identical snapshot. None produce a finding, because the detectors compare semantics and flag only *widening*.
+
+**Severity is calibrated, not maximized.** At a strict `fail-on: high` gate, recall is 82% — by design: sample/template MCP additions, pinned version bumps, broad `Read` allows, and newly-enabled Codex network access sit at `low`/`medium` because they widen the surface without being directly exploitable. The `high`/`critical` band is reserved for executable or secret-facing changes — a bare `Bash` grant, a removed `Read(.env)` deny, a `danger-full-access` sandbox, an unencrypted remote MCP endpoint. Full confusion matrix at every gate, per-category and per-case breakdowns: [benchmark/RESULTS.md](benchmark/RESULTS.md). Methodology and labels: [benchmark/labels.json](benchmark/labels.json).
+
 ## Design choices worth flagging
 
 - **Diff-first.** ScopeTrail cares about what changed in this PR, not whether the repo already had historical config debt.

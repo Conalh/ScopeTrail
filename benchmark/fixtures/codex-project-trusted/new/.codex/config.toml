@@ -1,0 +1,4 @@
+sandbox_mode = "read-only"
+
+[projects."/home/me/repo"]
+trust_level = "trusted"

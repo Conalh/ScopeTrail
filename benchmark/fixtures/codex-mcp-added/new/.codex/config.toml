@@ -1,0 +1,5 @@
+sandbox_mode = "read-only"
+
+[mcp_servers.scraper]
+command = "npx"
+args = ["-y", "@vendor/scraper@latest"]

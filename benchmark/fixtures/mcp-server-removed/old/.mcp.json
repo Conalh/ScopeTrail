@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "@modelcontextprotocol/server-filesystem@1.0.0",
+        "/workspace"
+      ]
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "@modelcontextprotocol/server-github@1.2.3"
+      ]
+    }
+  }
+}

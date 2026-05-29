@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "stripe": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@vendor/stripe-mcp@latest"
+      ]
+    }
+  }
+}

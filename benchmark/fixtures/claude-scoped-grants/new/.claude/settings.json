@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(src/main.ts)",
+      "mcp__github__get_issue",
+      "WebFetch(domain:api.example.com)",
+      "Read(src/config.ts)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(./secrets/key.pem)"
+    ]
+  }
+}
