@@ -46,12 +46,16 @@ async function runDiff(argv: string[]): Promise<number> {
     newRoot = parsed.newRoot;
   } else {
     try {
-      const baseSnapshot = await materializeGitSnapshot(parsed.repo, parsed.base);
+      const baseSnapshot = await materializeGitSnapshot(parsed.repo, parsed.base, {
+        includeSamples: parsed.includeSamples
+      });
       // `cleanup` is only assigned once BOTH snapshots exist, so if head
       // materialization fails (an unresolvable head ref, a max-buffer error)
       // the base snapshot's temp dir would leak. Clean it explicitly before
       // the error propagates to the handler below.
-      const headSnapshot = await materializeGitSnapshot(parsed.repo, parsed.head).catch(
+      const headSnapshot = await materializeGitSnapshot(parsed.repo, parsed.head, {
+        includeSamples: parsed.includeSamples
+      }).catch(
         async (headError: unknown) => {
           await baseSnapshot.cleanup();
           throw headError;
@@ -77,7 +81,7 @@ async function runDiff(argv: string[]): Promise<number> {
     // the CLI three times for markdown/json/github, which repeated
     // git snapshot materialization and detector work on each call.
     const findings = [
-      ...(await detectMcpDrift(oldRoot, newRoot)),
+      ...(await detectMcpDrift(oldRoot, newRoot, { includeSamples: parsed.includeSamples })),
       ...(await detectClaudeSettingsDrift(oldRoot, newRoot)),
       ...(await detectCodexConfigDrift(oldRoot, newRoot))
     ];
@@ -107,6 +111,7 @@ interface CommonDiffArgs {
   outMarkdown?: string;
   outJson?: string;
   failOn: DriftRating;
+  includeSamples: boolean;
 }
 
 type ParsedDiffArgs =
@@ -124,6 +129,7 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
   let outMarkdown: string | undefined;
   let outJson: string | undefined;
   let failOn: DriftRating = 'none';
+  let includeSamples = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -168,6 +174,11 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
       }
       failOn = value;
       index += 1;
+    } else if (arg === '--include-samples') {
+      // Boolean flag — opts into reviewing sample/template/disabled MCP configs
+      // (`.mcp.json.template`, prefixed examples, ...). Off by default because
+      // those files never load into an agent, so a change to one is not drift.
+      includeSamples = true;
     } else {
       return { ok: false, error: `Unknown argument: ${arg}` };
     }
@@ -189,7 +200,7 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
       return { ok: false, error: 'Missing required --head <ref> argument.' };
     }
 
-    return { ok: true, mode: 'git', repo, base, head, format, outMarkdown, outJson, failOn };
+    return { ok: true, mode: 'git', repo, base, head, format, outMarkdown, outJson, failOn, includeSamples };
   }
 
   if (!oldRoot) {
@@ -200,7 +211,7 @@ function parseDiffArgs(argv: string[]): ParsedDiffArgs {
     return { ok: false, error: 'Missing required --new <dir> argument.' };
   }
 
-  return { ok: true, mode: 'directories', oldRoot, newRoot, format, outMarkdown, outJson, failOn };
+  return { ok: true, mode: 'directories', oldRoot, newRoot, format, outMarkdown, outJson, failOn, includeSamples };
 }
 
 function isReportFormat(value: string | undefined): value is ReportFormat {
@@ -232,7 +243,10 @@ if (isMainModule()) {
 function usage(): string {
   return [
     'Usage:',
-    '  scopetrail diff --old <dir> --new <dir> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH] [--fail-on none|low|medium|high|critical]',
-    '  scopetrail diff --repo <repo> --base <ref> --head <ref> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH] [--fail-on none|low|medium|high|critical]'
+    '  scopetrail diff --old <dir> --new <dir> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH] [--fail-on none|low|medium|high|critical] [--include-samples]',
+    '  scopetrail diff --repo <repo> --base <ref> --head <ref> [--format text|markdown|json|github] [--out-markdown PATH] [--out-json PATH] [--fail-on none|low|medium|high|critical] [--include-samples]',
+    '',
+    '  --include-samples  Also review sample/template/disabled MCP configs (.mcp.json.template, .sample, prefixed examples).',
+    '                     Off by default: those files never load into an agent, so changes to them are not permission drift.'
   ].join('\n');
 }

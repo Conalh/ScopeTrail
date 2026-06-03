@@ -97,7 +97,7 @@ test('mcp_sample_remote_endpoint: http:// fires high severity, https:// stays me
       }, null, 2)
     );
 
-    const findings = await detectMcpDrift(oldDir, newDir);
+    const findings = await detectMcpDrift(oldDir, newDir, { includeSamples: true });
     const remoteEndpoint = findings.filter((f) => f.kind === 'scope_trail.mcp_sample_remote_endpoint');
     const bySubject = Object.fromEntries(remoteEndpoint.map((f) => [f.subject, f]));
 
@@ -382,11 +382,30 @@ test('detects MCP drift in Windsurf config files', async () => {
   );
 });
 
+test('sample MCP configs are not reviewed unless includeSamples is set (opt-in)', async () => {
+  // The Signal that drove this gate: a `.mcp.json.sample` / `.template` never
+  // loads into an agent runtime, so a change to one cannot widen what the agent
+  // is allowed to do. For a *drift* detector that makes it noise, not drift —
+  // the default report must stay silent on samples. Review is opt-in.
+  const oldDir = join(testDir, 'fixtures', 'mcp-sample-drift', 'old');
+  const newDir = join(testDir, 'fixtures', 'mcp-sample-drift', 'new');
+
+  const defaultFindings = await detectMcpDrift(oldDir, newDir);
+  assert.deepEqual(defaultFindings, [], 'sample configs must produce no findings by default');
+
+  // The opt-in re-enables the same fixture's sample findings — gated, not gone.
+  const optedIn = await detectMcpDrift(oldDir, newDir, { includeSamples: true });
+  assert.ok(
+    optedIn.some((finding) => finding.kind === 'scope_trail.mcp_sample_server_added'),
+    'includeSamples must re-enable sample review'
+  );
+});
+
 test('detects sample MCP config drift without treating it as active server drift', async () => {
   const oldDir = join(testDir, 'fixtures', 'mcp-sample-drift', 'old');
   const newDir = join(testDir, 'fixtures', 'mcp-sample-drift', 'new');
 
-  const findings = await detectMcpDrift(oldDir, newDir);
+  const findings = await detectMcpDrift(oldDir, newDir, { includeSamples: true });
 
   assert.equal(findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
   assert.equal(findings.some((finding) => finding.kind === 'scope_trail.unpinned_mcp_command'), false);
@@ -423,7 +442,7 @@ test('detects platform-suffixed MCP example drift without treating it as active 
   const oldDir = join(testDir, 'fixtures', 'mcp-platform-sample-drift', 'old');
   const newDir = join(testDir, 'fixtures', 'mcp-platform-sample-drift', 'new');
 
-  const findings = await detectMcpDrift(oldDir, newDir);
+  const findings = await detectMcpDrift(oldDir, newDir, { includeSamples: true });
 
   assert.equal(findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
   assert.equal(findings.some((finding) => finding.kind === 'scope_trail.unpinned_mcp_command'), false);
@@ -442,7 +461,7 @@ test('detects prefixed MCP config example drift without treating it as active se
   const oldDir = join(testDir, 'fixtures', 'mcp-prefixed-sample-drift', 'old');
   const newDir = join(testDir, 'fixtures', 'mcp-prefixed-sample-drift', 'new');
 
-  const findings = await detectMcpDrift(oldDir, newDir);
+  const findings = await detectMcpDrift(oldDir, newDir, { includeSamples: true });
 
   assert.equal(findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
   assert.equal(findings.some((finding) => finding.kind === 'scope_trail.unpinned_mcp_command'), false);

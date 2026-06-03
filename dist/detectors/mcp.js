@@ -47,7 +47,7 @@ const IGNORED_SAMPLE_SCAN_DIRS = new Set([
 // reads. Keeping the source of truth in the detector prevents the
 // snapshot list and the detector list from drifting (they did, before).
 export const MCP_TARGET_PATHS = MCP_CONFIGS.map((config) => config.path);
-export async function detectMcpDrift(oldRoot, newRoot) {
+export async function detectMcpDrift(oldRoot, newRoot, options = {}) {
     const findings = [];
     for (const config of MCP_CONFIGS) {
         // Surface invalid JSON as a finding instead of silently producing
@@ -139,6 +139,20 @@ export async function detectMcpDrift(oldRoot, newRoot) {
             }
         }
     }
+    // Sample/template configs are an opt-in surface — see McpDriftOptions for why
+    // a file that no agent loads can't be drift. Off by default keeps the report
+    // scoped to live configuration.
+    if (options.includeSamples) {
+        findings.push(...(await detectMcpSampleDrift(oldRoot, newRoot)));
+    }
+    return findings;
+}
+// Diff sample/template/disabled MCP configs on their own low-severity track so
+// a noisy template change can be reviewed for copy-paste hygiene without ever
+// being mistaken for a change to what an agent can actually do. Only runs when
+// the caller opts in via McpDriftOptions.includeSamples.
+async function detectMcpSampleDrift(oldRoot, newRoot) {
+    const findings = [];
     for (const path of await listMcpSampleConfigPaths(oldRoot, newRoot)) {
         const config = { path, serverKeys: ['mcpServers', 'servers'] };
         const newSource = await readJsonObjectWithSource(configPath(newRoot, path));

@@ -138,7 +138,7 @@ ScopeTrail is **local-only**. It reads the checked-out repository, materializes 
 
 The detectors cover the surfaces an AI agent can actually escalate through:
 
-- **MCP** — `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.codeium/windsurf/mcp_config.json`, sample/template/disabled variants, and prefixed sample files such as `claude_mcp_config.json`.
+- **MCP** — `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.codeium/windsurf/mcp_config.json`. Sample/template/disabled variants (and prefixed sample files such as `claude_mcp_config.json`) are reviewed only with `--include-samples` / the Action's `include-samples: true` — those files never load into an agent, so a change to one is not permission drift.
 - **Claude Code settings** — `.claude/settings.json`, including widened allow rules, removed deny rules, and added / removed / command-swapped hooks.
 - **Codex** — `.codex/config.toml`, including sandbox elevation, weakened approval policy, network access, trusted-project changes, and `[mcp_servers.NAME]` additions / unpinned commands.
 
@@ -159,7 +159,7 @@ ScopeTrail ships a labeled precision/recall benchmark over **35 fixture PRs** (2
 
 The 8 benign cases include seven engineered **false-positive traps** — narrowly-scoped Claude grants (a textual diff sees new `allow` lines), an all-tightening Codex posture, network access that was *already* on, a brand-new Codex config pinned to the narrowest posture, a dropped MCP `env` var, a removed MCP server, and a `.mcp.json` with reordered keys but an identical launch command — plus one byte-identical snapshot. None produce a finding, because the detectors compare semantics and flag only *widening*.
 
-**Severity is calibrated, not maximized.** At a strict `fail-on: high` gate, recall is 85% — by design: sample/template MCP additions, pinned version bumps, broad `Read` allows, and newly-enabled Codex network access sit at `low`/`medium` because they widen the surface without being directly exploitable. The `high`/`critical` band is reserved for executable or secret-facing changes — a bare `Bash` grant, a removed `Read(.env)` deny, a `danger-full-access` sandbox, an unencrypted remote MCP endpoint. Full confusion matrix at every gate, per-category and per-case breakdowns: [benchmark/RESULTS.md](benchmark/RESULTS.md). Methodology and labels: [benchmark/labels.json](benchmark/labels.json).
+**Severity is calibrated, not maximized.** At a strict `fail-on: high` gate, recall is 85% — by design: opt-in sample/template MCP additions, pinned version bumps, broad `Read` allows, and newly-enabled Codex network access sit at `low`/`medium` because they widen the surface without being directly exploitable. The `high`/`critical` band is reserved for executable or secret-facing changes — a bare `Bash` grant, a removed `Read(.env)` deny, a `danger-full-access` sandbox, an unencrypted remote MCP endpoint. Full confusion matrix at every gate, per-category and per-case breakdowns: [benchmark/RESULTS.md](benchmark/RESULTS.md). Methodology and labels: [benchmark/labels.json](benchmark/labels.json).
 
 ## Design choices worth flagging
 

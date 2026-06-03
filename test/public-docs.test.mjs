@@ -55,6 +55,12 @@ test('public docs describe active and sample MCP config coverage', async () => {
   assert.match(trust, /prefixed MCP config example files/i);
   assert.match(pilot, /sample\/template\/disabled MCP config findings/i);
   assert.match(pilot, /prefixed MCP config examples/i);
+
+  // Sample review is opt-in (off by default) — the docs must say so, and name
+  // the flag, so a reader never expects template changes to flag by default.
+  assert.match(readme, /include-samples/);
+  assert.match(trust, /off by default/i);
+  assert.match(trust, /include-samples/);
 });
 
 test('adoption checklist defines advisory-first rollout and feedback path', async () => {

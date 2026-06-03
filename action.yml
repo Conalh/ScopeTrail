@@ -23,6 +23,12 @@ inputs:
     description: Severity that fails the action. Use none, low, medium, high, or critical.
     required: false
     default: none
+  include-samples:
+    description: >-
+      Also review sample/template/disabled MCP configs (.mcp.json.template, .sample, prefixed examples).
+      Off by default because those files never load into an agent, so changes to them are not permission drift.
+    required: false
+    default: 'false'
 
 outputs:
   rating:
@@ -47,6 +53,7 @@ runs:
         SCOPE_BASE: ${{ inputs.base }}
         SCOPE_HEAD: ${{ inputs.head }}
         SCOPE_FAIL_ON: ${{ inputs.fail-on }}
+        SCOPE_INCLUDE_SAMPLES: ${{ inputs.include-samples }}
         DEFAULT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         DEFAULT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       run: |
@@ -56,6 +63,13 @@ runs:
         base="${SCOPE_BASE:-$DEFAULT_BASE}"
         head="${SCOPE_HEAD:-$DEFAULT_HEAD}"
         fail_on="${SCOPE_FAIL_ON:-none}"
+
+        # Optional opt-in: review sample/template/disabled MCP configs too.
+        # Empty unless requested, so the unquoted expansion below adds no arg.
+        include_samples=""
+        if [ "${SCOPE_INCLUDE_SAMPLES:-false}" = "true" ]; then
+          include_samples="--include-samples"
+        fi
 
         if [ -z "$base" ] || [ -z "$head" ]; then
           echo "::error::ScopeTrail needs base and head refs. Pass base/head inputs or run on pull_request with actions/checkout fetch-depth: 0."
@@ -77,7 +91,8 @@ runs:
           --format github \
           --out-markdown "$report_file" \
           --out-json "$json_file" \
-          --fail-on "$fail_on"
+          --fail-on "$fail_on" \
+          $include_samples
         cli_status=$?
         set -e
 

@@ -10,12 +10,12 @@ const execFileAsync = promisify(execFile);
 const testDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = join(testDir, '..');
 
-async function runDiff(repo, base, head) {
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    ['dist/index.js', 'diff', '--repo', repo, '--base', base, '--head', head, '--format', 'json'],
-    { cwd: packageRoot }
-  );
+async function runDiff(repo, base, head, { includeSamples = false } = {}) {
+  const args = ['dist/index.js', 'diff', '--repo', repo, '--base', base, '--head', head, '--format', 'json'];
+  if (includeSamples) {
+    args.push('--include-samples');
+  }
+  const { stdout } = await execFileAsync(process.execPath, args, { cwd: packageRoot });
   return JSON.parse(stdout);
 }
 
@@ -122,7 +122,7 @@ test('CLI git diff snapshots sample MCP config paths', async () => {
       'add sample mcp config'
     );
 
-    const report = await runDiff(fx.repo, base, head);
+    const report = await runDiff(fx.repo, base, head, { includeSamples: true });
 
     assert.deepEqual(
       report.findings.map((finding) => finding.kind),
@@ -130,6 +130,42 @@ test('CLI git diff snapshots sample MCP config paths', async () => {
     );
     assert.equal(report.findings[0].location.file, 'examples/.mcp.json.sample');
     assert.equal(report.findings.some((finding) => finding.kind === 'scope_trail.mcp_server_added'), false);
+  } finally {
+    await fx.cleanup();
+  }
+});
+
+test('CLI git diff leaves sample MCP config paths unscanned without --include-samples', async () => {
+  // Regression for the opt-in default: a committed `.mcp.json.sample` must not
+  // surface in the report unless the caller passes --include-samples. Template
+  // and sample files never load into an agent, so they are not permission drift.
+  const fx = await makeGitRepo({
+    prefix: 'scopetrail-git-sample-default-',
+    initialFiles: { 'README.md': 'base\n' },
+    initialMessage: 'base',
+  });
+  try {
+    const base = await fx.head();
+    const head = await fx.commit(
+      {
+        'examples/.mcp.json.sample': `${JSON.stringify(
+          {
+            mcpServers: {
+              'copy-risk': {
+                command: 'npx',
+                args: ['-y', '@acme/copy-risk@latest']
+              }
+            }
+          },
+          null,
+          2
+        )}\n`,
+      },
+      'add sample mcp config (default run)'
+    );
+
+    const report = await runDiff(fx.repo, base, head);
+    assert.deepEqual(report.findings, [], 'sample paths must not be scanned by default');
   } finally {
     await fx.cleanup();
   }
@@ -161,7 +197,7 @@ test('CLI git diff snapshots platform-suffixed MCP example paths', async () => {
       'add platform sample mcp config'
     );
 
-    const report = await runDiff(fx.repo, base, head);
+    const report = await runDiff(fx.repo, base, head, { includeSamples: true });
 
     assert.deepEqual(
       report.findings.map((finding) => finding.kind),
@@ -311,7 +347,7 @@ test('CLI git diff snapshots prefixed MCP config example paths', async () => {
       'add prefixed sample mcp config'
     );
 
-    const report = await runDiff(fx.repo, base, head);
+    const report = await runDiff(fx.repo, base, head, { includeSamples: true });
 
     assert.deepEqual(
       report.findings.map((finding) => finding.kind),

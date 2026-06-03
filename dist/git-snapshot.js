@@ -18,12 +18,12 @@ export const SNAPSHOT_PATHS = [
     ...CLAUDE_TARGET_PATHS,
     ...CODEX_TARGET_PATHS
 ];
-export async function materializeGitSnapshot(repo, ref) {
+export async function materializeGitSnapshot(repo, ref, options = {}) {
     await verifyGitRef(repo, ref);
     const root = await mkdtemp(join(tmpdir(), 'scopetrail-snapshot-'));
     let completed = false;
     try {
-        for (const relativePath of await snapshotPathsForRef(repo, ref)) {
+        for (const relativePath of await snapshotPathsForRef(repo, ref, options.includeSamples ?? false)) {
             const content = await readPathAtRef(repo, ref, relativePath);
             if (content === null) {
                 continue;
@@ -53,11 +53,17 @@ export async function materializeGitSnapshot(repo, ref) {
         }
     }
 }
-async function snapshotPathsForRef(repo, ref) {
+async function snapshotPathsForRef(repo, ref, includeSamples) {
     const paths = new Set(SNAPSHOT_PATHS);
-    for (const relativePath of await listPathsAtRef(repo, ref)) {
-        if (isMcpSampleConfigPath(relativePath)) {
-            paths.add(relativePath);
+    // Sample/template configs are opt-in (see McpDriftOptions). When the caller
+    // hasn't asked for them, skip the full `git ls-tree -r` walk entirely — the
+    // detector would ignore the materialized files anyway, so listing every
+    // tracked path on every PR is wasted work.
+    if (includeSamples) {
+        for (const relativePath of await listPathsAtRef(repo, ref)) {
+            if (isMcpSampleConfigPath(relativePath)) {
+                paths.add(relativePath);
+            }
         }
     }
     return [...paths].sort();
