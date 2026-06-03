@@ -74,7 +74,22 @@ interface McpServerModel extends McpServerConfig {
   sourceText?: string;
 }
 
-export async function detectMcpDrift(oldRoot: string, newRoot: string): Promise<Finding[]> {
+export interface McpDriftOptions {
+  // Sample/template/disabled MCP configs (`.mcp.json.template`, `.sample`,
+  // prefixed examples, ...) never load into an agent runtime — only the live
+  // `.mcp.json` and editor configs do. A change to a template therefore can't
+  // alter what an agent is actually allowed to do, so for a *drift* detector it
+  // is noise, not drift. Scanning them is opt-in: teams who want copy-paste
+  // hygiene on shipped examples ask for it explicitly; the default report stays
+  // scoped to surfaces an agent actually loads.
+  includeSamples?: boolean;
+}
+
+export async function detectMcpDrift(
+  oldRoot: string,
+  newRoot: string,
+  options: McpDriftOptions = {}
+): Promise<Finding[]> {
   const findings: Finding[] = [];
 
   for (const config of MCP_CONFIGS) {
@@ -172,6 +187,23 @@ export async function detectMcpDrift(oldRoot: string, newRoot: string): Promise<
       }
     }
   }
+
+  // Sample/template configs are an opt-in surface — see McpDriftOptions for why
+  // a file that no agent loads can't be drift. Off by default keeps the report
+  // scoped to live configuration.
+  if (options.includeSamples) {
+    findings.push(...(await detectMcpSampleDrift(oldRoot, newRoot)));
+  }
+
+  return findings;
+}
+
+// Diff sample/template/disabled MCP configs on their own low-severity track so
+// a noisy template change can be reviewed for copy-paste hygiene without ever
+// being mistaken for a change to what an agent can actually do. Only runs when
+// the caller opts in via McpDriftOptions.includeSamples.
+async function detectMcpSampleDrift(oldRoot: string, newRoot: string): Promise<Finding[]> {
+  const findings: Finding[] = [];
 
   for (const path of await listMcpSampleConfigPaths(oldRoot, newRoot)) {
     const config = { path, serverKeys: ['mcpServers', 'servers'] };

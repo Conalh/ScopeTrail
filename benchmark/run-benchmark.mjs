@@ -44,7 +44,12 @@ function runDiff(fixture) {
     '--new',
     join(caseDir, 'new'),
     '--format',
-    'json'
+    'json',
+    // The corpus labels sample/template MCP fixtures (category `mcp-sample`) as
+    // expected detections, so the benchmark opts into that surface explicitly.
+    // The default CLI report leaves it off — those files never load into an
+    // agent, so a change to one is not permission drift.
+    '--include-samples'
   ];
   const stdout = execFileSync('node', [cli, ...args], {
     encoding: 'utf8',
