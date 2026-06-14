@@ -1,4 +1,5 @@
 import { createFinding as createCanonicalFinding, createReport as createCanonicalReport, } from 'agent-gov-core';
+import { describeConfigClient } from './clients.js';
 /**
  * Project a ScopeTrail-internal {@link DriftReport} into the canonical
  * agent-gov-core {@link CanonicalReport} envelope. Used at the JSON
@@ -20,6 +21,13 @@ function toCanonicalReport(report) {
             data.subject = f.subject;
         if (f.recommendation)
             data.recommendation = f.recommendation;
+        // Provenance for cross-tool consumers (GovVerdict): which client loads the
+        // surface, and whether it is a live runtime config or an inert sample. The
+        // human renderers print the same two facts; here they ride structured.
+        if (f.client)
+            data.client = f.client;
+        if (f.runtimeActive !== undefined)
+            data.runtimeActive = f.runtimeActive;
         const spec = {
             tool: 'scope_trail',
             name,
@@ -50,11 +58,40 @@ export function meetsFailOnThreshold(rating, threshold) {
     return threshold !== 'none' && severityRank[rating] >= severityRank[threshold];
 }
 export function createReport(findings) {
+    const enriched = findings.map(withClientMetadata);
     return {
-        rating: rateFindings(findings),
-        findingCount: findings.length,
-        findings
+        rating: rateFindings(enriched),
+        findingCount: enriched.length,
+        findings: enriched
     };
+}
+// Stamp each finding with the client that loads its config surface and whether
+// that surface is a live runtime config (vs. an inert sample/template). Derived
+// from the finding's path so the detectors don't each have to repeat the
+// path→client convention. A detector that already set either field wins.
+function withClientMetadata(finding) {
+    if (finding.client !== undefined && finding.runtimeActive !== undefined) {
+        return finding;
+    }
+    const info = describeConfigClient(finding.file);
+    return {
+        ...finding,
+        client: finding.client ?? info.client,
+        runtimeActive: finding.runtimeActive ?? info.runtimeActive
+    };
+}
+// Compact `(client=Cursor, runtime_active=true)` suffix shared by the text and
+// GitHub-annotation renderers. Snake_case `runtime_active` matches the literal
+// shape pilot reviewers asked to see in the output.
+function clientTag(finding) {
+    const parts = [];
+    if (finding.client) {
+        parts.push(`client=${finding.client}`);
+    }
+    if (finding.runtimeActive !== undefined) {
+        parts.push(`runtime_active=${finding.runtimeActive}`);
+    }
+    return parts.length > 0 ? ` (${parts.join(', ')})` : '';
 }
 export function renderReport(report, format) {
     if (format === 'json') {
@@ -99,6 +136,10 @@ function renderMarkdown(report) {
             // emphasis runs into the PR comment. `recommendation` is hardcoded
             // by detectors, but we escape it for hygiene.
             lines.push(`- **${mdCode(finding.subject)}** (${mdCode(finding.file)}): ${escapeMdInline(finding.message)}`);
+            // Client labels and the boolean are detector-controlled, not config-
+            // controlled, so they can't carry injection — but wrap the label in a
+            // code span anyway for consistent rendering with the rest of the report.
+            lines.push(`  Loaded by: ${mdCode(finding.client ?? 'unknown')} — runtime_active: ${finding.runtimeActive ?? true}`);
             lines.push(`  Recommendation: ${escapeMdInline(finding.recommendation)}`);
         }
         lines.push('');
@@ -131,7 +172,7 @@ function appendPilotFeedback(lines) {
 function renderText(report) {
     const lines = [`ScopeTrail permission drift: ${report.rating.toUpperCase()}`];
     for (const finding of report.findings) {
-        lines.push(`[${finding.severity.toUpperCase()}] ${finding.subject}: ${finding.message}`);
+        lines.push(`[${finding.severity.toUpperCase()}] ${finding.subject}: ${finding.message}${clientTag(finding)}`);
     }
     if (report.findings.length === 0) {
         lines.push('No agent permission drift findings.');
@@ -146,7 +187,7 @@ function renderGithubAnnotations(report) {
         .map((finding) => {
         const level = finding.severity === 'critical' || finding.severity === 'high' ? 'error' : 'warning';
         const title = `ScopeTrail ${finding.severity} permission drift`;
-        const message = `${finding.message} Recommendation: ${finding.recommendation}`;
+        const message = `${finding.message}${clientTag(finding)} Recommendation: ${finding.recommendation}`;
         const properties = [`file=${escapeProperty(finding.file)}`];
         if (finding.line && finding.line > 0) {
             properties.push(`line=${finding.line}`);
