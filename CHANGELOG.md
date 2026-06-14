@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Under v1.0, minor versions may carry breaking changes.
 
+## [0.3.2] — 2026-06-14
+
+### Added
+- **Findings now state `client` and `runtime_active`.** Every finding reports which agent/editor loads the surface (Cursor / VS Code / Windsurf / Claude Code / Codex) and whether that surface is a live runtime config (`true`) or an inert sample/template (`false`). Surfaced in the text and GitHub-annotation output as `(client=…, runtime_active=…)`, in markdown as a `Loaded by:` line, and in the canonical JSON `data` bag for cross-tool consumers. This answers the pilot ask in [Abilityai/trinity#911](https://github.com/Abilityai/trinity/issues/911) for output that says *what loads a change and why it is active*.
+
+### Changed
+- **Sample/template MCP scanning is opt-in.** `.mcp.json.template`, `.sample`, `.disabled`, `.example`, and prefixed examples (`claude_mcp_config.json`, …) never load into an agent runtime, so a change to one is not permission drift. They are reviewed only with `--include-samples` / the Action's `include-samples: true`, on a separate low-severity `scope_trail.mcp_sample_*` finding track so they can never be mistaken for live `.mcp.json` drift. (#50)
+
+### Fixed
+- Closed permission-drift blind spots and a release-blocking bin resolution bug surfaced in external review: the `scopetrail` bin now runs correctly whether invoked directly or through an npm symlink, MCP server maps under multiple recognized keys are merged instead of shadowed, and sensitive env/header/cwd changes on an unchanged launch command are flagged. (#49)
+
 ## [0.3.1] — 2026-05-28
 
 ### Internal
