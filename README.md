@@ -117,13 +117,15 @@ Text output against the bundled `test/fixtures/combined` fixture:
 
 ```
 ScopeTrail permission drift: CRITICAL
-[HIGH] stripe-admin: MCP server "stripe-admin" was added.
-[HIGH] stripe-admin: MCP server "stripe-admin" uses an unpinned command: npx -y @vendor/stripe-mcp@latest.
-[HIGH] Bash(npm *): Claude permission allowlist now includes broad access: Bash(npm *).
-[MEDIUM] Read(~/**): Claude permission allowlist now includes broad access: Read(~/**).
-[CRITICAL] Read(.env): Claude permission deny rule was removed: Read(.env).
-[HIGH] PreToolUse: Claude hook "PreToolUse" was removed.
+[HIGH] stripe-admin: MCP server "stripe-admin" was added. (client=Claude Code, runtime_active=true)
+[HIGH] stripe-admin: MCP server "stripe-admin" uses an unpinned command: npx -y @vendor/stripe-mcp@latest. (client=Claude Code, runtime_active=true)
+[HIGH] Bash(npm *): Claude permission allowlist now includes broad access: Bash(npm *). (client=Claude Code, runtime_active=true)
+[MEDIUM] Read(~/**): Claude permission allowlist now includes broad access: Read(~/**). (client=Claude Code, runtime_active=true)
+[CRITICAL] Read(.env): Claude permission deny rule was removed: Read(.env). (client=Claude Code, runtime_active=true)
+[HIGH] PreToolUse: Claude hook "PreToolUse" was removed. (client=Claude Code, runtime_active=true)
 ```
+
+Each finding states the **client** that loads the surface and whether it is `runtime_active` — a live config an agent loads (`true`) versus an opt-in sample/template that never loads (`false`). That keeps `.cursor/mcp.json` drift visibly distinct from a `.mcp.json.template` example.
 
 `--format json` emits the canonical [agent-gov-core](https://github.com/Conalh/agent-gov-core) `Report` envelope so cross-tool reviewers like GovVerdict can merge findings across the suite:
 
@@ -141,7 +143,9 @@ ScopeTrail permission drift: CRITICAL
       "location": { "file": ".claude/settings.json" },
       "data": {
         "subject": "Read(.env)",
-        "recommendation": "Keep deny rules for secrets, credentials, and protected files unless a reviewer approves the removal."
+        "recommendation": "Keep deny rules for secrets, credentials, and protected files unless a reviewer approves the removal.",
+        "client": "Claude Code",
+        "runtimeActive": true
       },
       "fingerprint": "b3242ffa5f6b40d8"
     }
