@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mergeFindings } from 'agent-gov-core';
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -35,6 +36,81 @@ test('CLI emits JSON permission drift report', async () => {
       'scope_trail.hook_removed'
     ]
   );
+
+  const widened = report.findings.filter(
+    (finding) => finding.kind === 'scope_trail.permission_allow_widened'
+  );
+
+  assert.equal(widened.length, 2);
+  assert.equal(widened[0].location.line, widened[1].location.line);
+  assert.equal(widened[0].salientKey, widened[0].data.subject);
+  assert.equal(widened[1].salientKey, widened[1].data.subject);
+  assert.notEqual(widened[0].salientKey, widened[1].salientKey);
+  assert.notEqual(widened[0].fingerprint, widened[1].fingerprint);
+
+  const merged = mergeFindings([report]);
+  const mergedWidened = merged.findings.filter(
+    (finding) => finding.kind === 'scope_trail.permission_allow_widened'
+  );
+  assert.equal(mergedWidened.length, 2);
+  assert.equal(merged.duplicateCollapsed, 0);
+});
+
+test('CLI emits distinct JSON identities for file-only Claude deny removals', async () => {
+  const workDir = await mkdtemp(join(tmpdir(), 'scopetrail-file-only-salient-'));
+  try {
+    const oldDir = join(workDir, 'old');
+    const newDir = join(workDir, 'new');
+    await mkdir(join(oldDir, '.claude'), { recursive: true });
+    await mkdir(join(newDir, '.claude'), { recursive: true });
+    await writeFile(
+      join(oldDir, '.claude', 'settings.json'),
+      JSON.stringify({
+        permissions: {
+          allow: [],
+          deny: ['Read(.env)', 'Read(**/*.pem)']
+        }
+      }, null, 2) + '\n'
+    );
+    await writeFile(
+      join(newDir, '.claude', 'settings.json'),
+      JSON.stringify({
+        permissions: {
+          allow: [],
+          deny: []
+        }
+      }, null, 2) + '\n'
+    );
+
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      ['dist/index.js', 'diff', '--old', oldDir, '--new', newDir, '--format', 'json'],
+      { cwd: packageRoot }
+    );
+    const report = JSON.parse(stdout);
+    const removedDenies = report.findings.filter(
+      (finding) => finding.kind === 'scope_trail.permission_deny_removed'
+    );
+
+    assert.equal(removedDenies.length, 2);
+    assert.equal(removedDenies[0].location.file, '.claude/settings.json');
+    assert.equal(removedDenies[1].location.file, '.claude/settings.json');
+    assert.equal(removedDenies[0].location.line, undefined);
+    assert.equal(removedDenies[1].location.line, undefined);
+    assert.equal(removedDenies[0].salientKey, removedDenies[0].data.subject);
+    assert.equal(removedDenies[1].salientKey, removedDenies[1].data.subject);
+    assert.notEqual(removedDenies[0].salientKey, removedDenies[1].salientKey);
+    assert.notEqual(removedDenies[0].fingerprint, removedDenies[1].fingerprint);
+
+    const merged = mergeFindings([report]);
+    const mergedRemovedDenies = merged.findings.filter(
+      (finding) => finding.kind === 'scope_trail.permission_deny_removed'
+    );
+    assert.equal(mergedRemovedDenies.length, 2);
+    assert.equal(merged.duplicateCollapsed, 0);
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
 });
 
 test('CLI emits Markdown permission drift report', async () => {
