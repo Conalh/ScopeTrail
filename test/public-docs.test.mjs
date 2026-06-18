@@ -23,6 +23,7 @@ test('README surfaces the canonical GitHub Action setup', async () => {
   assert.match(readme, installTagPattern);
   assert.match(readme, /fetch-depth:\s*0/);
   assert.match(readme, /fail-on:\s*none/);
+  assert.match(readme, /\|\s*`include-samples`\s*\|\s*`false`\s*\|/);
 });
 
 test('trust doc describes local-only advisory GitHub Action behavior', async () => {
@@ -36,6 +37,8 @@ test('trust doc describes local-only advisory GitHub Action behavior', async () 
   assert.match(trust, /permissions:\s*`contents: read`/i);
   assert.match(trust, /`fetch-depth: 0`/);
   assert.match(trust, /`fail-on: none`/);
+  assert.match(trust, /\.claude\/settings\.local\.json/);
+  assert.match(trust, /machine-local|not checked in|untracked/i);
   assert.match(trust, /does not provide a security guarantee/i);
 });
 
