@@ -94,7 +94,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0      # required: ScopeTrail compares base..head
-      - uses: Conalh/ScopeTrail@v0.3.2
+      - uses: Conalh/ScopeTrail@v0.3.3
         with:
           fail-on: none       # start advisory; raise to high/critical later
 ```
@@ -163,6 +163,12 @@ The detectors cover the surfaces an AI agent can actually escalate through:
 - **Claude Code settings** — `.claude/settings.json`, including widened allow rules, removed deny rules, and added / removed / command-swapped hooks.
 - **Codex** — `.codex/config.toml`, including sandbox elevation, weakened approval policy, network access, trusted-project changes, and `[mcp_servers.NAME]` additions / unpinned commands.
 
+### Claude Code local settings boundary
+
+ScopeTrail reviews `.claude/settings.json` because it is the repository-shared Claude Code configuration surface.
+
+It intentionally does not treat `.claude/settings.local.json` as a team configuration surface. Claude Code defines that file as machine-local, untracked state for personal preferences and experimentation. A local settings file committed accidentally should be removed from source control and added to `.gitignore`.
+
 Findings carry a `severity` (`low` / `medium` / `high` / `critical`) and the report's overall `rating` is the max severity across findings. `--fail-on` gates CI on that rating.
 
 ## How well it catches it
@@ -205,7 +211,7 @@ CLI:
 | `--out-json <path>` | Also write the canonical JSON report to this path. |
 | `--fail-on <rating>` | Exit 1 when rating >= `low` / `medium` / `high` / `critical`. Default `none`. |
 
-GitHub Action inputs (`Conalh/ScopeTrail@v0.3.2`):
+GitHub Action inputs (`Conalh/ScopeTrail@v0.3.3`):
 
 | Input | Default | Description |
 | --- | --- | --- |
@@ -213,6 +219,7 @@ GitHub Action inputs (`Conalh/ScopeTrail@v0.3.2`):
 | `base` | PR base SHA | Base ref. |
 | `head` | PR head SHA | Head ref. |
 | `fail-on` | `none` | Severity that fails the action. |
+| `include-samples` | `false` | Also review sample/template/disabled MCP configurations. These findings remain advisory and report `runtime_active=false`. |
 
 Action outputs: `rating` (`none`/`low`/`medium`/`high`/`critical`) and `finding-count`.
 

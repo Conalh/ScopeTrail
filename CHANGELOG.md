@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Under v1.0, minor versions may carry breaking changes.
 
+## [0.3.3] — 2026-06-18
+
+### Fixed
+
+- Added the missing `include-samples` input to the README GitHub Action input table.
+
+### Documentation
+
+- Clarified that ScopeTrail reviews the repository-shared `.claude/settings.json` surface, while `.claude/settings.local.json` is machine-local state that should remain untracked.
+
+No detector, fingerprint, runtime-support, or GitHub Action behavior changed.
+
 ## [0.3.2] — 2026-06-14
 
 ### Added

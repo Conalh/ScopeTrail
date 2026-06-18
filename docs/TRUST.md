@@ -6,6 +6,12 @@ ScopeTrail is a local-only GitHub Action and CLI for reviewing AI-agent permissi
 
 ScopeTrail reads the checked-out repository and compares supported agent configuration files between the pull request base and head refs. Supported active files include `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.codeium/windsurf/mcp_config.json`, `.claude/settings.json`, and `.codex/config.toml`.
 
+### Claude Code local settings boundary
+
+ScopeTrail reviews `.claude/settings.json` because it is the repository-shared Claude Code configuration surface.
+
+It intentionally does not treat `.claude/settings.local.json` as a team configuration surface. Claude Code defines that file as machine-local, untracked state for personal preferences and experimentation. A local settings file committed accidentally should be removed from source control and added to `.gitignore`.
+
 ScopeTrail can also review sample/template/disabled MCP config files such as `.mcp.json.sample`, `.mcp.json.template`, `.mcp.json.disabled`, `.mcp.json.example`, platform-suffixed MCP example files such as `.mcp.json.windows.example` and `.mcp.json.example.mac`, nested `mcp_config.json.example` variants, and prefixed MCP config example files such as `example_mcp_config.json`, `claude_mcp_config.json`, `cursor_mcp_config.json`, and `vscode_mcp_config.json`. This is **off by default**: those files never load into an agent runtime, so a change to one cannot alter what an agent is allowed to do, and reporting it as drift would be noise. Pass `--include-samples` (CLI) or set `include-samples: true` (Action) to opt in. When enabled, those findings are reported separately from active MCP server drift so copied examples can be reviewed without implying they are live configuration.
 
 In GitHub Actions, `fetch-depth: 0` is required so ScopeTrail can compare the pull request base and head commits instead of only seeing the latest checkout.
