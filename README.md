@@ -94,7 +94,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0      # required: ScopeTrail compares base..head
-      - uses: Conalh/ScopeTrail@v0.3.3
+      - uses: Conalh/ScopeTrail@v0.4.0
         with:
           fail-on: none       # start advisory; raise to high/critical later
 ```
@@ -141,13 +141,14 @@ Each finding states the **client** that loads the surface and whether it is `run
       "severity": "critical",
       "message": "Claude permission deny rule was removed: Read(.env).",
       "location": { "file": ".claude/settings.json" },
+      "salientKey": "Read(.env)",
       "data": {
         "subject": "Read(.env)",
         "recommendation": "Keep deny rules for secrets, credentials, and protected files unless a reviewer approves the removal.",
         "client": "Claude Code",
         "runtimeActive": true
       },
-      "fingerprint": "b3242ffa5f6b40d8"
+      "fingerprint": "1a6a5b7504e48356"
     }
   ]
 }
@@ -211,7 +212,7 @@ CLI:
 | `--out-json <path>` | Also write the canonical JSON report to this path. |
 | `--fail-on <rating>` | Exit 1 when rating >= `low` / `medium` / `high` / `critical`. Default `none`. |
 
-GitHub Action inputs (`Conalh/ScopeTrail@v0.3.3`):
+GitHub Action inputs (`Conalh/ScopeTrail@v0.4.0`):
 
 | Input | Default | Description |
 | --- | --- | --- |

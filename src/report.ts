@@ -46,6 +46,7 @@ function toCanonicalReport(report: DriftReport): CanonicalReport {
       severity: f.severity,
       message: f.message,
       location: f.line !== undefined ? { file: f.file, line: f.line } : { file: f.file },
+      salientKey: f.subject,
       ...(Object.keys(data).length > 0 ? { data } : {}),
     };
     return createCanonicalFinding(spec);
