@@ -3,6 +3,7 @@ import { configPath, isRecord, lineOfJsonKey, lineOfJsonStringValue, readJsonObj
 import {
   isPipeToShellCommand,
   isUnpinnedCommand,
+  isUnpinnedPackageSpec,
   serverCommand,
   remoteEndpoint,
   isRemoteEndpoint,
@@ -71,7 +72,15 @@ type McpConfigPath = typeof MCP_CONFIGS[number]['path'];
 
 interface McpServerModel extends McpServerConfig {
   line?: number;
-  sourceText?: string;
+  commandLine?: number;
+  argLines?: LocatedString[];
+  urlLine?: number;
+  serverUrlLine?: number;
+}
+
+interface LocatedString {
+  value: string;
+  line?: number;
 }
 
 export interface McpDriftOptions {
@@ -305,13 +314,25 @@ async function readMcpServers(
       continue;
     }
 
+    const serverLine = lineOfJsonKey(source.text, name);
+    const command = typeof value.command === 'string' ? value.command : undefined;
+    const args = Array.isArray(value.args) ? value.args.filter((arg): arg is string => typeof arg === 'string') : undefined;
+    const url = typeof value.url === 'string' ? value.url : undefined;
+    const serverUrl = typeof value.serverUrl === 'string' ? value.serverUrl : undefined;
+
     servers[name] = {
-      line: lineOfJsonKey(source.text, name),
-      sourceText: source.text,
-      command: typeof value.command === 'string' ? value.command : undefined,
-      args: Array.isArray(value.args) ? value.args.filter((arg): arg is string => typeof arg === 'string') : undefined,
-      url: typeof value.url === 'string' ? value.url : undefined,
-      serverUrl: typeof value.serverUrl === 'string' ? value.serverUrl : undefined,
+      line: serverLine,
+      command,
+      commandLine: lineForStringValue(source.text, command, serverLine),
+      args,
+      argLines: args?.map((arg) => ({
+        value: arg,
+        line: lineForStringValue(source.text, arg, serverLine)
+      })),
+      url,
+      urlLine: lineForStringValue(source.text, url, serverLine),
+      serverUrl,
+      serverUrlLine: lineForStringValue(source.text, serverUrl, serverLine),
       ...readSensitiveFields(value)
     };
   }
@@ -420,35 +441,21 @@ function severityForSampleCommandRisk(server: McpServerModel): Severity {
   return isPipeToShellCommand(server) ? 'high' : 'medium';
 }
 
-function looksLikePackageName(value: string): boolean {
-  return /^[a-z0-9@][a-z0-9._/@-]+$/i.test(value) && !value.startsWith('-');
-}
-
-function hasExactVersion(value: string): boolean {
-  const packageVersion = value.startsWith('@') ? value.indexOf('@', 1) : value.indexOf('@');
-  if (packageVersion === -1) {
-    return false;
-  }
-
-  const version = value.slice(packageVersion + 1);
-  return /^\d+\.\d+\.\d+/.test(version);
-}
-
 function lineForServerCommand(server: McpServerModel): number | undefined {
-  return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url, server.serverUrl]) ?? server.line;
+  return firstLineForValues(allLocatedValues(server)) ?? server.line;
 }
 
 function lineForUnpinnedCommand(server: McpServerModel): number | undefined {
   const command = serverCommand(server);
   const normalized = command.toLowerCase();
   if (normalized.includes('@latest')) {
-    return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url, server.serverUrl], (value) =>
+    return firstLineForValues(allLocatedValues(server), (value) =>
       value.toLowerCase().includes('@latest')
     );
   }
 
   if (/\b(curl|iwr|invoke-webrequest)\b/.test(normalized)) {
-    return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url, server.serverUrl]);
+    return firstLineForValues(allLocatedValues(server));
   }
 
   const cmd = (server.command ?? '').toLowerCase();
@@ -457,7 +464,7 @@ function lineForUnpinnedCommand(server: McpServerModel): number | undefined {
   // locator — bunx findings fell back to the server declaration's
   // line instead of pointing at the package.
   if (['npx', 'uvx', 'pipx', 'bunx'].includes(cmd)) {
-    return firstLineForValues(server, server.args ?? [], (arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
+    return firstLineForValues(server.argLines ?? [], isUnpinnedPackageSpec);
   }
   // Wrapper runners: args[0] is the executor subcommand (`exec`,
   // `dlx`, `x`). Skip it before locating — `exec` and `dlx` both
@@ -466,12 +473,12 @@ function lineForUnpinnedCommand(server: McpServerModel): number | undefined {
   if (['npm', 'yarn', 'pnpm'].includes(cmd)) {
     const args = server.args ?? [];
     if (args.length > 1 && isWrapperSubcommand(cmd, args[0])) {
-      return firstLineForValues(server, args.slice(1), (arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
+      return firstLineForValues((server.argLines ?? []).slice(1), isUnpinnedPackageSpec);
     }
   }
 
   if (/https:\/\/github\.com\/[^ ]+/.test(normalized)) {
-    return firstLineForValues(server, [server.url, server.serverUrl, ...(server.args ?? [])], (value) =>
+    return firstLineForValues([urlValue(server), serverUrlValue(server), ...(server.argLines ?? [])], (value) =>
       value.toLowerCase().includes('https://github.com/')
     );
   }
@@ -480,7 +487,7 @@ function lineForUnpinnedCommand(server: McpServerModel): number | undefined {
 }
 
 function lineForRemoteEndpoint(server: McpServerModel): number | undefined {
-  return firstLineForValues(server, [server.url, server.serverUrl], isRemoteEndpoint);
+  return firstLineForValues([urlValue(server), serverUrlValue(server)], isRemoteEndpoint);
 }
 
 function isWrapperSubcommand(cmd: string, arg: string): boolean {
@@ -493,25 +500,51 @@ function isWrapperSubcommand(cmd: string, arg: string): boolean {
 
 
 function firstLineForValues(
-  server: McpServerModel,
-  values: Array<string | undefined>,
+  values: Array<LocatedString | undefined>,
   predicate: (value: string) => boolean = () => true
 ): number | undefined {
-  const source = getSourceText(server);
-  for (const value of values) {
-    if (value && predicate(value)) {
-      const line = lineOfJsonStringValue(source, value);
-      if (line) {
-        return line;
-      }
+  for (const located of values) {
+    if (located?.value && predicate(located.value)) {
+      return located.line;
     }
   }
 
   return undefined;
 }
 
-function getSourceText(server: McpServerModel): string {
-  return server.sourceText ?? '';
+function allLocatedValues(server: McpServerModel): LocatedString[] {
+  return [
+    commandValue(server),
+    ...(server.argLines ?? []),
+    urlValue(server),
+    serverUrlValue(server)
+  ].filter((value): value is LocatedString => Boolean(value?.value));
+}
+
+function commandValue(server: McpServerModel): LocatedString | undefined {
+  return locatedValue(server.command, server.commandLine);
+}
+
+function urlValue(server: McpServerModel): LocatedString | undefined {
+  return locatedValue(server.url, server.urlLine);
+}
+
+function serverUrlValue(server: McpServerModel): LocatedString | undefined {
+  return locatedValue(server.serverUrl, server.serverUrlLine);
+}
+
+function locatedValue(value: string | undefined, line: number | undefined): LocatedString | undefined {
+  return value ? { value, line } : undefined;
+}
+
+function lineForStringValue(sourceText: string, value: string | undefined, startLine: number | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const offset = Math.max((startLine ?? 1) - 1, 0);
+  const line = lineOfJsonStringValue(sourceText.split(/\r?\n/).slice(offset).join('\n'), value);
+  return line ? offset + line : undefined;
 }
 
 function normalizePath(path: string): string {

@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { configPath, isRecord, lineOfJsonKey, lineOfJsonStringValue, readJsonObjectWithSource } from '../discovery.js';
-import { isPipeToShellCommand, isUnpinnedCommand, serverCommand, remoteEndpoint, isRemoteEndpoint, isUnencryptedEndpoint, readSensitiveFields, sensitiveFieldChanges, describeSensitiveFieldChange, recommendationForSensitiveFieldChange } from '../mcp-risk.js';
+import { isPipeToShellCommand, isUnpinnedCommand, isUnpinnedPackageSpec, serverCommand, remoteEndpoint, isRemoteEndpoint, isUnencryptedEndpoint, readSensitiveFields, sensitiveFieldChanges, describeSensitiveFieldChange, recommendationForSensitiveFieldChange } from '../mcp-risk.js';
 const MCP_CONFIGS = [
     { path: '.mcp.json', serverKeys: ['mcpServers'] },
     { path: '.cursor/mcp.json', serverKeys: ['mcpServers', 'servers'] },
@@ -243,13 +243,24 @@ async function readMcpServers(root, config) {
         if (!isRecord(value)) {
             continue;
         }
+        const serverLine = lineOfJsonKey(source.text, name);
+        const command = typeof value.command === 'string' ? value.command : undefined;
+        const args = Array.isArray(value.args) ? value.args.filter((arg) => typeof arg === 'string') : undefined;
+        const url = typeof value.url === 'string' ? value.url : undefined;
+        const serverUrl = typeof value.serverUrl === 'string' ? value.serverUrl : undefined;
         servers[name] = {
-            line: lineOfJsonKey(source.text, name),
-            sourceText: source.text,
-            command: typeof value.command === 'string' ? value.command : undefined,
-            args: Array.isArray(value.args) ? value.args.filter((arg) => typeof arg === 'string') : undefined,
-            url: typeof value.url === 'string' ? value.url : undefined,
-            serverUrl: typeof value.serverUrl === 'string' ? value.serverUrl : undefined,
+            line: serverLine,
+            command,
+            commandLine: lineForStringValue(source.text, command, serverLine),
+            args,
+            argLines: args?.map((arg) => ({
+                value: arg,
+                line: lineForStringValue(source.text, arg, serverLine)
+            })),
+            url,
+            urlLine: lineForStringValue(source.text, url, serverLine),
+            serverUrl,
+            serverUrlLine: lineForStringValue(source.text, serverUrl, serverLine),
             ...readSensitiveFields(value)
         };
     }
@@ -341,28 +352,17 @@ function readServerMap(json, serverKeys) {
 function severityForSampleCommandRisk(server) {
     return isPipeToShellCommand(server) ? 'high' : 'medium';
 }
-function looksLikePackageName(value) {
-    return /^[a-z0-9@][a-z0-9._/@-]+$/i.test(value) && !value.startsWith('-');
-}
-function hasExactVersion(value) {
-    const packageVersion = value.startsWith('@') ? value.indexOf('@', 1) : value.indexOf('@');
-    if (packageVersion === -1) {
-        return false;
-    }
-    const version = value.slice(packageVersion + 1);
-    return /^\d+\.\d+\.\d+/.test(version);
-}
 function lineForServerCommand(server) {
-    return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url, server.serverUrl]) ?? server.line;
+    return firstLineForValues(allLocatedValues(server)) ?? server.line;
 }
 function lineForUnpinnedCommand(server) {
     const command = serverCommand(server);
     const normalized = command.toLowerCase();
     if (normalized.includes('@latest')) {
-        return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url, server.serverUrl], (value) => value.toLowerCase().includes('@latest'));
+        return firstLineForValues(allLocatedValues(server), (value) => value.toLowerCase().includes('@latest'));
     }
     if (/\b(curl|iwr|invoke-webrequest)\b/.test(normalized)) {
-        return firstLineForValues(server, [server.command, ...(server.args ?? []), server.url, server.serverUrl]);
+        return firstLineForValues(allLocatedValues(server));
     }
     const cmd = (server.command ?? '').toLowerCase();
     // Direct runners: the package name lives in args[0..]. `bunx` was
@@ -370,7 +370,7 @@ function lineForUnpinnedCommand(server) {
     // locator — bunx findings fell back to the server declaration's
     // line instead of pointing at the package.
     if (['npx', 'uvx', 'pipx', 'bunx'].includes(cmd)) {
-        return firstLineForValues(server, server.args ?? [], (arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
+        return firstLineForValues(server.argLines ?? [], isUnpinnedPackageSpec);
     }
     // Wrapper runners: args[0] is the executor subcommand (`exec`,
     // `dlx`, `x`). Skip it before locating — `exec` and `dlx` both
@@ -379,16 +379,16 @@ function lineForUnpinnedCommand(server) {
     if (['npm', 'yarn', 'pnpm'].includes(cmd)) {
         const args = server.args ?? [];
         if (args.length > 1 && isWrapperSubcommand(cmd, args[0])) {
-            return firstLineForValues(server, args.slice(1), (arg) => looksLikePackageName(arg) && !hasExactVersion(arg));
+            return firstLineForValues((server.argLines ?? []).slice(1), isUnpinnedPackageSpec);
         }
     }
     if (/https:\/\/github\.com\/[^ ]+/.test(normalized)) {
-        return firstLineForValues(server, [server.url, server.serverUrl, ...(server.args ?? [])], (value) => value.toLowerCase().includes('https://github.com/'));
+        return firstLineForValues([urlValue(server), serverUrlValue(server), ...(server.argLines ?? [])], (value) => value.toLowerCase().includes('https://github.com/'));
     }
     return server.line;
 }
 function lineForRemoteEndpoint(server) {
-    return firstLineForValues(server, [server.url, server.serverUrl], isRemoteEndpoint);
+    return firstLineForValues([urlValue(server), serverUrlValue(server)], isRemoteEndpoint);
 }
 function isWrapperSubcommand(cmd, arg) {
     const sub = arg.toLowerCase();
@@ -400,20 +400,41 @@ function isWrapperSubcommand(cmd, arg) {
         return sub === 'dlx' || sub === 'exec' || sub === 'x';
     return false;
 }
-function firstLineForValues(server, values, predicate = () => true) {
-    const source = getSourceText(server);
-    for (const value of values) {
-        if (value && predicate(value)) {
-            const line = lineOfJsonStringValue(source, value);
-            if (line) {
-                return line;
-            }
+function firstLineForValues(values, predicate = () => true) {
+    for (const located of values) {
+        if (located?.value && predicate(located.value)) {
+            return located.line;
         }
     }
     return undefined;
 }
-function getSourceText(server) {
-    return server.sourceText ?? '';
+function allLocatedValues(server) {
+    return [
+        commandValue(server),
+        ...(server.argLines ?? []),
+        urlValue(server),
+        serverUrlValue(server)
+    ].filter((value) => Boolean(value?.value));
+}
+function commandValue(server) {
+    return locatedValue(server.command, server.commandLine);
+}
+function urlValue(server) {
+    return locatedValue(server.url, server.urlLine);
+}
+function serverUrlValue(server) {
+    return locatedValue(server.serverUrl, server.serverUrlLine);
+}
+function locatedValue(value, line) {
+    return value ? { value, line } : undefined;
+}
+function lineForStringValue(sourceText, value, startLine) {
+    if (!value) {
+        return undefined;
+    }
+    const offset = Math.max((startLine ?? 1) - 1, 0);
+    const line = lineOfJsonStringValue(sourceText.split(/\r?\n/).slice(offset).join('\n'), value);
+    return line ? offset + line : undefined;
 }
 function normalizePath(path) {
     return path.replaceAll('\\', '/');

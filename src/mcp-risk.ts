@@ -69,7 +69,7 @@ export function isPipeToShellCommand(spec: McpCommandShape): boolean {
 // The previous narrow `looksLikePackageName` regex rejected any value
 // containing range operators, so `@vendor/helper@^1.2.3` slipped past
 // the unpinned check entirely.
-function isUnpinnedPackageSpec(value: string): boolean {
+export function isUnpinnedPackageSpec(value: string): boolean {
   const spec = parsePackageSpec(value);
   if (!spec) {
     return false;
@@ -241,4 +241,3 @@ function changedRecordKeys(
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-

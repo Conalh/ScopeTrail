@@ -51,7 +51,7 @@ export function isPipeToShellCommand(spec) {
 // The previous narrow `looksLikePackageName` regex rejected any value
 // containing range operators, so `@vendor/helper@^1.2.3` slipped past
 // the unpinned check entirely.
-function isUnpinnedPackageSpec(value) {
+export function isUnpinnedPackageSpec(value) {
     const spec = parsePackageSpec(value);
     if (!spec) {
         return false;

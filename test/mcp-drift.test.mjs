@@ -180,6 +180,87 @@ test('lineForUnpinnedCommand pinpoints package line for bunx + npm exec / yarn d
   }
 });
 
+test('lineForUnpinnedCommand uses the matching server block when package args repeat', async () => {
+  // A config can add two servers that launch the same MCP package. The
+  // annotation still needs to point at the package line inside the matching
+  // server, not the first identical string value in the file.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-repeat-line-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(newDir, { recursive: true });
+    writeFileSync(join(oldDir, '.mcp.json'), JSON.stringify({ mcpServers: {} }));
+    const content = [
+      '{',
+      '  "mcpServers": {',
+      '    "first": {',
+      '      "command": "npx",',
+      '      "args": ["-y", "@vendor/shared@latest"]',
+      '    },',
+      '    "second": {',
+      '      "command": "npx",',
+      '      "args": ["-y", "@vendor/shared@latest"]',
+      '    }',
+      '  }',
+      '}',
+      ''
+    ].join('\n');
+    writeFileSync(join(newDir, '.mcp.json'), content);
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    const unpinned = findings.filter((f) => f.kind === 'scope_trail.unpinned_mcp_command');
+    const bySubject = Object.fromEntries(unpinned.map((f) => [f.subject, f]));
+
+    assert.equal(bySubject.first.line, 5);
+    assert.equal(bySubject.second.line, 9);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('lineForUnpinnedCommand pinpoints semver-range package specs', async () => {
+  // Detection and annotation must share the same package-spec rules. Ranges
+  // such as ^1.2.3 are unpinned; the finding should point at the range arg.
+  const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const root = mkdtempSync(join(tmpdir(), 'scopetrail-range-line-'));
+  try {
+    const oldDir = join(root, 'old');
+    const newDir = join(root, 'new');
+    mkdirSync(oldDir, { recursive: true });
+    mkdirSync(newDir, { recursive: true });
+    writeFileSync(join(oldDir, '.mcp.json'), JSON.stringify({ mcpServers: {} }));
+    const content = [
+      '{',
+      '  "mcpServers": {',
+      '    "range-server": {',
+      '      "command": "npx",',
+      '      "args": [',
+      '        "-y",',
+      '        "@vendor/helper@^1.2.3"',
+      '      ]',
+      '    }',
+      '  }',
+      '}',
+      ''
+    ].join('\n');
+    writeFileSync(join(newDir, '.mcp.json'), content);
+
+    const findings = await detectMcpDrift(oldDir, newDir);
+    const unpinned = findings.find((f) => f.kind === 'scope_trail.unpinned_mcp_command');
+
+    assert.ok(unpinned, 'expected unpinned_mcp_command for semver range');
+    assert.equal(unpinned.line, 7);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('isUnpinnedCommand flags bunx packages without exact versions', async () => {
   // bunx is the Bun equivalent of npx and ships as a standalone
   // binary, so MCP configs use `"command": "bunx"` directly. Prior
@@ -572,4 +653,3 @@ test('mcp_remote_endpoint: http:// fires critical severity, https:// fires high'
     rmSync(root, { recursive: true, force: true });
   }
 });
-
